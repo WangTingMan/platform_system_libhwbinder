@@ -20,7 +20,13 @@
 #include "TextOutput.h"
 
 #include <utils/threads.h>
-#include <sys/uio.h>
+#include <atomic>
+
+struct iovec
+{
+    void* iov_base = nullptr;
+    int iov_len = 0;
+};
 
 // ---------------------------------------------------------------------------
 namespace android {

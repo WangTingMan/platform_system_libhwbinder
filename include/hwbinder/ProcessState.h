@@ -24,7 +24,9 @@
 
 #include <utils/threads.h>
 
-#include <pthread.h>
+#include <mutex>
+
+#include <hwbinder/libhidl_export.h>
 
 // WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
 // this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
@@ -36,7 +38,7 @@ namespace hardware {
 
 class IPCThreadState;
 
-class ProcessState : public virtual RefBase
+class LIBHIDL_EXPORT ProcessState : public virtual RefBase
 {
 public:
     static  sp<ProcessState>    self();
@@ -105,7 +107,7 @@ private:
             void*               mVMStart;
 
             // Protects thread count variable below.
-            pthread_mutex_t     mThreadCountLock;
+            std::mutex          mThreadCountLock;
             // Number of binder threads current executing a command.
             size_t              mExecutingThreadsCount;
             // Maximum number for binder threads allowed for this process.

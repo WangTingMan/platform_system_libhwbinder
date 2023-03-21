@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <hwbinder/IBinder.h>
 
+#include <hwbinder/libhidl_export.h>
+
 // WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
 // this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
 // code should not try to use these things.
@@ -29,7 +31,7 @@
 namespace android {
 namespace hardware {
 
-class BHwBinder : public IBinder
+class LIBHIDL_EXPORT BHwBinder : public IBinder
 {
 public:
                         BHwBinder();
@@ -95,7 +97,7 @@ private:
 
 // ---------------------------------------------------------------------------
 
-class BpHwRefBase : public virtual RefBase
+class LIBHIDL_EXPORT BpHwRefBase : public virtual RefBase
 {
 protected:
     explicit                BpHwRefBase(const sp<IBinder>& o);

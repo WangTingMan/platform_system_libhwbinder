@@ -32,15 +32,11 @@
 #include "TextOutput.h"
 
 #include <atomic>
+#include <mutex>
 #include <errno.h>
 #include <inttypes.h>
-#include <linux/sched.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
-#include <sys/ioctl.h>
-#include <sys/resource.h>
-#include <unistd.h>
 
 #if LOG_NDEBUG
 
@@ -115,15 +111,24 @@ static const char *kCommandStrings[] = {
 
 static const char* getReturnString(uint32_t cmd)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+    return "unknown";
+#else
     size_t idx = cmd & _IOC_NRMASK;
     if (idx < sizeof(kReturnStrings) / sizeof(kReturnStrings[0]))
         return kReturnStrings[idx];
     else
         return "unknown";
+#endif
 }
 
 static const void* printBinderTransactionData(TextOutput& out, const void* data)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+    return nullptr;
+#else
     const binder_transaction_data* btd =
         (const binder_transaction_data*)data;
     if (btd->target.handle < 1024) {
@@ -139,6 +144,7 @@ static const void* printBinderTransactionData(TextOutput& out, const void* data)
         << "offsets=" << btd->data.ptr.offsets << " (" << (void*)btd->offsets_size
         << " bytes)";
     return btd+1;
+#endif
 }
 
 static const void* printReturnCommand(TextOutput& out, const void* _cmd)
@@ -147,6 +153,9 @@ static const void* printReturnCommand(TextOutput& out, const void* _cmd)
     const int32_t* cmd = (const int32_t*)_cmd;
     uint32_t code = (uint32_t)*cmd++;
     size_t cmdIndex = code & 0xff;
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     if (code == BR_ERROR) {
         out << "BR_ERROR: " << (void*)(long)(*cmd++) << endl;
         return cmd;
@@ -199,6 +208,7 @@ static const void* printReturnCommand(TextOutput& out, const void* _cmd)
     }
 
     out << endl;
+#endif
     return cmd;
 }
 
@@ -215,6 +225,9 @@ static const void* printCommand(TextOutput& out, const void* _cmd)
     }
     out << kCommandStrings[cmdIndex];
 
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     switch (code) {
         case BC_TRANSACTION:
         case BC_REPLY: {
@@ -271,18 +284,27 @@ static const void* printCommand(TextOutput& out, const void* _cmd)
             // BC_EXIT_LOOPER
             break;
     }
-
+#endif
     out << endl;
     return cmd;
 }
 
-static pthread_mutex_t gTLSMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::mutex gTLSMutex;
 static std::atomic<bool> gHaveTLS = false;
+
+#ifdef _MSC_VER
+#else
 static pthread_key_t gTLS = 0;
+#endif
+
 static std::atomic<bool> gShutdown = false;
 
 IPCThreadState* IPCThreadState::self()
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+    return nullptr;
+#else
     if (gHaveTLS.load(std::memory_order_acquire)) {
 restart:
         const pthread_key_t k = gTLS;
@@ -310,15 +332,20 @@ restart:
     }
     pthread_mutex_unlock(&gTLSMutex);
     goto restart;
+#endif
 }
 
 IPCThreadState* IPCThreadState::selfOrNull()
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     if (gHaveTLS.load(std::memory_order_acquire)) {
         const pthread_key_t k = gTLS;
         IPCThreadState* st = (IPCThreadState*)pthread_getspecific(k);
         return st;
     }
+#endif
     return nullptr;
 }
 
@@ -326,6 +353,9 @@ void IPCThreadState::shutdown()
 {
     gShutdown.store(true, std::memory_order_relaxed);
 
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     if (gHaveTLS.load(std::memory_order_acquire)) {
         // XXX Need to wait for all thread pool threads to exit!
         IPCThreadState* st = (IPCThreadState*)pthread_getspecific(gTLS);
@@ -336,6 +366,7 @@ void IPCThreadState::shutdown()
         pthread_key_delete(gTLS);
         gHaveTLS.store(false, std::memory_order_release);
     }
+#endif
 }
 
 sp<ProcessState> IPCThreadState::process()
@@ -402,9 +433,13 @@ void IPCThreadState::restoreCallingIdentity(int64_t token)
 
 void IPCThreadState::clearCaller()
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     mCallingPid = getpid();
     mCallingSid = nullptr;  // expensive to lookup
     mCallingUid = getuid();
+#endif
 }
 
 void IPCThreadState::flushCommands()
@@ -429,6 +464,9 @@ status_t IPCThreadState::getAndExecuteCommand()
     int32_t cmd;
 
     result = talkWithDriver();
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     if (result >= NO_ERROR) {
         size_t IN = mIn.dataAvail();
         if (IN < sizeof(int32_t)) return result;
@@ -474,7 +512,7 @@ status_t IPCThreadState::getAndExecuteCommand()
             func();
         }
     }
-
+#endif
     return result;
 }
 
@@ -536,6 +574,9 @@ void IPCThreadState::processPostWriteDerefs()
 
 void IPCThreadState::joinThreadPool(bool isMain)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     LOG_THREADPOOL("**** THREAD %p (PID %d) IS JOINING THE THREAD POOL\n", (void*)pthread_self(), getpid());
 
     mOut.writeInt32(isMain ? BC_ENTER_LOOPER : BC_REGISTER_LOOPER);
@@ -565,6 +606,7 @@ void IPCThreadState::joinThreadPool(bool isMain)
     mOut.writeInt32(BC_EXIT_LOOPER);
     mIsLooper = false;
     talkWithDriver(false);
+#endif
 }
 
 int IPCThreadState::setupPolling(int* fd)
@@ -579,7 +621,11 @@ int IPCThreadState::setupPolling(int* fd)
     mProcess->setThreadPoolConfiguration(1, true /* callerWillJoin */);
     mIsPollingThread = true;
 
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     mOut.writeInt32(BC_ENTER_LOOPER);
+#endif
     *fd = mProcess->mDriverFD;
     return 0;
 }
@@ -603,7 +649,11 @@ void IPCThreadState::stopProcess(bool /*immediate*/)
     flushCommands();
     int fd = mProcess->mDriverFD;
     mProcess->mDriverFD = -1;
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     close(fd);
+#endif
     //kill(getpid(), SIGKILL);
 }
 
@@ -611,8 +661,11 @@ status_t IPCThreadState::transact(int32_t handle,
                                   uint32_t code, const Parcel& data,
                                   Parcel* reply, uint32_t flags)
 {
-    status_t err;
+    status_t err = NO_ERROR;
 
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     flags |= TF_ACCEPT_FDS;
 
     IF_LOG_TRANSACTIONS() {
@@ -671,42 +724,58 @@ status_t IPCThreadState::transact(int32_t handle,
     } else {
         err = waitForResponse(nullptr, nullptr);
     }
-
+#endif
     return err;
 }
 
 void IPCThreadState::incStrongHandle(int32_t handle, BpHwBinder *proxy)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     LOG_REMOTEREFS("IPCThreadState::incStrongHandle(%d)\n", handle);
     mOut.writeInt32(BC_ACQUIRE);
     mOut.writeInt32(handle);
     // Create a temp reference until the driver has handled this command.
     proxy->incStrong(mProcess.get());
     mPostWriteStrongDerefs.push(proxy);
+#endif
 }
 
 void IPCThreadState::decStrongHandle(int32_t handle)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     LOG_REMOTEREFS("IPCThreadState::decStrongHandle(%d)\n", handle);
     mOut.writeInt32(BC_RELEASE);
     mOut.writeInt32(handle);
+#endif
 }
 
 void IPCThreadState::incWeakHandle(int32_t handle, BpHwBinder *proxy)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     LOG_REMOTEREFS("IPCThreadState::incWeakHandle(%d)\n", handle);
     mOut.writeInt32(BC_INCREFS);
     mOut.writeInt32(handle);
     // Create a temp reference until the driver has handled this command.
     proxy->getWeakRefs()->incWeak(mProcess.get());
     mPostWriteWeakDerefs.push(proxy->getWeakRefs());
+#endif
 }
 
 void IPCThreadState::decWeakHandle(int32_t handle)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     LOG_REMOTEREFS("IPCThreadState::decWeakHandle(%d)\n", handle);
     mOut.writeInt32(BC_DECREFS);
     mOut.writeInt32(handle);
+#endif
 }
 
 status_t IPCThreadState::attemptIncStrongHandle(int32_t handle)
@@ -743,17 +812,25 @@ void IPCThreadState::expungeHandle(int32_t handle, IBinder* binder)
 
 status_t IPCThreadState::requestDeathNotification(int32_t handle, BpHwBinder* proxy)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     mOut.writeInt32(BC_REQUEST_DEATH_NOTIFICATION);
     mOut.writeInt32((int32_t)handle);
     mOut.writePointer((uintptr_t)proxy);
+#endif
     return NO_ERROR;
 }
 
 status_t IPCThreadState::clearDeathNotification(int32_t handle, BpHwBinder* proxy)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     mOut.writeInt32(BC_CLEAR_DEATH_NOTIFICATION);
     mOut.writeInt32((int32_t)handle);
     mOut.writePointer((uintptr_t)proxy);
+#endif
     return NO_ERROR;
 }
 
@@ -765,10 +842,14 @@ IPCThreadState::IPCThreadState()
       mIsLooper(false),
       mIsPollingThread(false),
       mCallRestriction(mProcess->mCallRestriction) {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     pthread_setspecific(gTLS, this);
     clearCaller();
     mIn.setDataCapacity(256);
     mOut.setDataCapacity(256);
+#endif
 }
 
 IPCThreadState::~IPCThreadState()
@@ -777,19 +858,25 @@ IPCThreadState::~IPCThreadState()
 
 status_t IPCThreadState::sendReply(const Parcel& reply, uint32_t flags)
 {
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     status_t err;
     status_t statusBuffer;
     err = writeTransactionData(BC_REPLY_SG, flags, -1, 0, reply, &statusBuffer);
     if (err < NO_ERROR) return err;
-
+#endif
     return waitForResponse(nullptr, nullptr);
 }
 
 status_t IPCThreadState::waitForResponse(Parcel *reply, status_t *acquireResult)
 {
     uint32_t cmd;
-    int32_t err;
+    int32_t err = NO_ERROR;
 
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     while (1) {
         if ((err=talkWithDriver()) < NO_ERROR) break;
         err = mIn.errorCheck();
@@ -877,7 +964,7 @@ finish:
         if (reply) reply->setError(err);
         mLastError = err;
     }
-
+#endif
     return err;
 }
 
@@ -887,6 +974,10 @@ status_t IPCThreadState::talkWithDriver(bool doReceive)
         return -EBADF;
     }
 
+#ifdef _MSC_VER
+    status_t err = NO_ERROR;
+    ALOGE( "Not Porting" );
+#else
     binder_write_read bwr;
 
     // Is the read buffer empty?
@@ -982,13 +1073,16 @@ status_t IPCThreadState::talkWithDriver(bool doReceive)
         }
         return NO_ERROR;
     }
-
+#endif
     return err;
 }
 
 status_t IPCThreadState::writeTransactionData(int32_t cmd, uint32_t binderFlags,
     int32_t handle, uint32_t code, const Parcel& data, status_t* statusBuffer)
 {
+#ifdef _MSC_VER   
+    ALOGE( "Not Porting" );
+#else
     binder_transaction_data_sg tr_sg;
     /* Don't pass uninitialized stack data to a remote process */
     tr_sg.transaction_data.target.ptr = 0;
@@ -1020,7 +1114,7 @@ status_t IPCThreadState::writeTransactionData(int32_t cmd, uint32_t binderFlags,
 
     mOut.writeInt32(cmd);
     mOut.write(&tr_sg, sizeof(tr_sg));
-
+#endif
     return NO_ERROR;
 }
 
@@ -1046,6 +1140,10 @@ void IPCThreadState::addPostCommandTask(const std::function<void(void)>& task) {
 
 status_t IPCThreadState::executeCommand(int32_t cmd)
 {
+#ifdef _MSC_VER    
+    status_t result = NO_ERROR;
+    ALOGE( "Not Porting" );
+#else
     BHwBinder* obj;
     RefBase::weakref_type* refs;
     status_t result = NO_ERROR;
@@ -1279,7 +1377,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
     if (result != NO_ERROR) {
         mLastError = result;
     }
-
+#endif
     return result;
 }
 
@@ -1307,6 +1405,9 @@ void IPCThreadState::freeBuffer(Parcel* parcel, const uint8_t* data,
                                 const binder_size_t* /*objects*/,
                                 size_t /*objectsSize*/, void* /*cookie*/)
 {
+#ifdef _MSC_VER    
+    ALOGE( "Not Porting" );
+#else
     //ALOGI("Freeing parcel %p", &parcel);
     IF_LOG_COMMANDS() {
         alog << "Writing BC_FREE_BUFFER for " << data << endl;
@@ -1316,6 +1417,7 @@ void IPCThreadState::freeBuffer(Parcel* parcel, const uint8_t* data,
     IPCThreadState* state = self();
     state->mOut.writeInt32(BC_FREE_BUFFER);
     state->mOut.writePointer((uintptr_t)data);
+#endif
 }
 
 } // namespace hardware

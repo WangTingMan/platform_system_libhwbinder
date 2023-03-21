@@ -18,7 +18,6 @@
 
 #include <hwbinder/Debug.h>
 
-#include <cutils/atomic.h>
 #include <utils/Log.h>
 #include <utils/RefBase.h>
 #include <utils/Vector.h>
@@ -26,9 +25,9 @@
 #include "BufferedTextOutput.h"
 #include <hwbinder/Static.h>
 
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <mutex>
 
 // ---------------------------------------------------------------------------
 
@@ -91,17 +90,16 @@ struct BufferedTextOutput::ThreadState
     Vector<sp<BufferedTextOutput::BufferState> > states;
 };
 
-static pthread_mutex_t gMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::mutex gMutex;
 
-static volatile int32_t gSequence = 0;
+static volatile std::atomic_int32_t gSequence = 0;
 
 static volatile int32_t gFreeBufferIndex = -1;
 
 static int32_t allocBufferIndex()
 {
     int32_t res = -1;
-
-    pthread_mutex_lock(&gMutex);
+    std::lock_guard<std::mutex> locker( gMutex );
 
     if (gFreeBufferIndex >= 0) {
         res = gFreeBufferIndex;
@@ -113,24 +111,21 @@ static int32_t allocBufferIndex()
         gTextBuffers.add(-1);
     }
 
-    pthread_mutex_unlock(&gMutex);
-
     return res;
 }
 
 static void freeBufferIndex(int32_t idx)
 {
-    pthread_mutex_lock(&gMutex);
+    std::lock_guard<std::mutex> locker( gMutex );
     gTextBuffers.editItemAt(idx) = gFreeBufferIndex;
     gFreeBufferIndex = idx;
-    pthread_mutex_unlock(&gMutex);
 }
 
 // ---------------------------------------------------------------------------
 
 BufferedTextOutput::BufferedTextOutput(uint32_t flags)
     : mFlags(flags)
-    , mSeq(android_atomic_inc(&gSequence))
+    , mSeq((gSequence))
     , mIndex(allocBufferIndex())
 {
     mGlobalState = new BufferState(mSeq);

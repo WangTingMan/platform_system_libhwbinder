@@ -22,9 +22,6 @@
 #define __packed __attribute__((__packed__))
 #endif
 
-#include <sys/ioctl.h>
-#include <linux/android/binder.h>
-
 #ifndef BR_ONEWAY_SPAM_SUSPECT
 // Temporary definition of BR_ONEWAY_SPAM_SUSPECT. For production
 // this will come from UAPI binder.h

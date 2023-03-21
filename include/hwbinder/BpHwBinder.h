@@ -21,6 +21,8 @@
 #include <utils/KeyedVector.h>
 #include <utils/threads.h>
 
+#include <hwbinder/libhidl_export.h>
+
 // WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
 // this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
 // code should not try to use these things.
@@ -29,7 +31,7 @@
 namespace android {
 namespace hardware {
 
-class BpHwBinder : public IBinder
+class LIBHIDL_EXPORT BpHwBinder : public IBinder
 {
 public:
                         BpHwBinder(int32_t handle);
@@ -66,7 +68,7 @@ public:
                         //    transaction on the node.
                         // It does NOT include local strong references to the node
             ssize_t     getNodeStrongRefCount();
-    class ObjectManager
+    class LIBHIDL_EXPORT ObjectManager
     {
     public:
                     ObjectManager();

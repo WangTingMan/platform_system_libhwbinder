@@ -18,7 +18,6 @@
 
 #include <hwbinder/ProcessState.h>
 
-#include <cutils/atomic.h>
 #include <hwbinder/BpHwBinder.h>
 #include <hwbinder/IPCThreadState.h>
 #include <utils/Log.h>
@@ -32,13 +31,12 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define DEFAULT_BINDER_VM_SIZE ((1 * 1024 * 1024) - sysconf(_SC_PAGE_SIZE) * 2)
+#include <atomic>
+
+#define DEFAULT_BINDER_VM_SIZE ((1 * 1024 * 1024) - /*sysconf(_SC_PAGE_SIZE)*/2 * 2)
 #define DEFAULT_MAX_BINDER_THREADS 0
 #define DEFAULT_ENABLE_ONEWAY_SPAM_DETECTION 1
 
@@ -121,6 +119,9 @@ void ProcessState::becomeContextManager()
 {
     AutoMutex _l(mLock);
 
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     flat_binder_object obj {
         .flags = FLAT_BINDER_FLAG_TXN_SECURITY_CTX,
     };
@@ -138,6 +139,7 @@ void ProcessState::becomeContextManager()
     if (result == -1) {
         ALOGE("Binder ioctl to become context manager failed: %s\n", strerror(errno));
     }
+#endif
 }
 
 // Get references to userspace objects held by the kernel binder driver
@@ -147,6 +149,11 @@ void ProcessState::becomeContextManager()
 // should only be used for debugging and not dereferenced, they may
 // already be invalid.
 ssize_t ProcessState::getKernelReferences(size_t buf_count, uintptr_t* buf) {
+
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+    return 0;
+#else
     binder_node_debug_info info = {};
 
     uintptr_t* end = buf ? buf + buf_count : nullptr;
@@ -166,6 +173,7 @@ ssize_t ProcessState::getKernelReferences(size_t buf_count, uintptr_t* buf) {
     } while (info.ptr != 0);
 
     return count;
+#endif
 }
 
 // Queries the driver for the current strong reference count of the node
@@ -173,6 +181,11 @@ ssize_t ProcessState::getKernelReferences(size_t buf_count, uintptr_t* buf) {
 //
 // Returns -1 in case of failure, otherwise the strong reference count.
 ssize_t ProcessState::getStrongRefCountForNodeByHandle(int32_t handle) {
+
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+    return 0;
+#else
     binder_node_info_for_ref info;
     memset(&info, 0, sizeof(binder_node_info_for_ref));
 
@@ -190,6 +203,7 @@ ssize_t ProcessState::getStrongRefCountForNodeByHandle(int32_t handle) {
     }
 
     return info.strong_count;
+#endif
 }
 
 size_t ProcessState::getMmapSize() {
@@ -290,11 +304,17 @@ void ProcessState::expungeHandle(int32_t handle, IBinder* binder)
 }
 
 String8 ProcessState::makeBinderThreadName() {
+
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+    return String8();
+#else
     int32_t s = android_atomic_add(1, &mThreadPoolSeq);
     pid_t pid = getpid();
     String8 name;
     name.appendFormat("HwBinder:%d_%X", pid, s);
     return name;
+#endif
 }
 
 void ProcessState::spawnPooledThread(bool isMain)
@@ -333,11 +353,15 @@ status_t ProcessState::setThreadPoolConfiguration(size_t maxThreads, bool caller
     size_t kernelMaxThreads = threadsToAllocate;
 
     AutoMutex _l(mLock);
+
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     if (ioctl(mDriverFD, BINDER_SET_MAX_THREADS, &kernelMaxThreads) == -1) {
         ALOGE("Binder ioctl to set max threads failed: %s", strerror(errno));
         return -errno;
     }
-
+#endif
     mMaxThreads = maxThreads;
     mSpawnThreadOnStart = spawnThreadOnStart;
 
@@ -346,10 +370,15 @@ status_t ProcessState::setThreadPoolConfiguration(size_t maxThreads, bool caller
 
 status_t ProcessState::enableOnewaySpamDetection(bool enable) {
     uint32_t enableDetection = enable ? 1 : 0;
+
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+#else
     if (ioctl(mDriverFD, BINDER_ENABLE_ONEWAY_SPAM_DETECTION, &enableDetection) == -1) {
         ALOGI("Binder ioctl to enable oneway spam detection failed: %s", strerror(errno));
         return -errno;
     }
+#endif
     return NO_ERROR;
 }
 
@@ -363,6 +392,11 @@ void ProcessState::giveThreadPoolName() {
 
 static int open_driver()
 {
+
+#ifdef _MSC_VER
+    ALOGE( "Not Porting" );
+    return 0;
+#else
     int fd = open("/dev/hwbinder", O_RDWR | O_CLOEXEC);
     if (fd >= 0) {
         int vers = 0;
@@ -391,12 +425,12 @@ static int open_driver()
         ALOGW("Opening '/dev/hwbinder' failed: %s\n", strerror(errno));
     }
     return fd;
+#endif
 }
 
 ProcessState::ProcessState(size_t mmapSize)
     : mDriverFD(open_driver())
-    , mVMStart(MAP_FAILED)
-    , mThreadCountLock(PTHREAD_MUTEX_INITIALIZER)
+    , mVMStart(nullptr)
     , mExecutingThreadsCount(0)
     , mMaxThreads(DEFAULT_MAX_BINDER_THREADS)
     , mStarvationStartTimeMs(0)
@@ -408,6 +442,10 @@ ProcessState::ProcessState(size_t mmapSize)
 {
     if (mDriverFD >= 0) {
         // mmap the binder, providing a chunk of virtual address space to receive transactions.
+
+#ifdef _MSC_VER
+        ALOGE( "Not Porting" );
+#else
         mVMStart = mmap(nullptr, mMmapSize, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, mDriverFD, 0);
         if (mVMStart == MAP_FAILED) {
             // *sigh*
@@ -415,6 +453,7 @@ ProcessState::ProcessState(size_t mmapSize)
             close(mDriverFD);
             mDriverFD = -1;
         }
+#endif
     }
 
 #ifdef __ANDROID__
@@ -425,10 +464,15 @@ ProcessState::ProcessState(size_t mmapSize)
 ProcessState::~ProcessState()
 {
     if (mDriverFD >= 0) {
+
+#ifdef _MSC_VER
+        ALOGE( "Not Porting" );
+#else
         if (mVMStart != MAP_FAILED) {
             munmap(mVMStart, mMmapSize);
         }
         close(mDriverFD);
+#endif
     }
     mDriverFD = -1;
 }

@@ -24,12 +24,19 @@
 
 #include <functional>
 
+#include <hwbinder/libhidl_export.h>
+
 // WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
 // this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
 // code should not try to use these things.
 
 #if defined(_WIN32)
-typedef  int  uid_t;
+#ifndef uid_t
+#define uid_t int
+#endif
+#ifndef pid_t
+#define pid_t int
+#endif
 #endif
 
 // ---------------------------------------------------------------------------
@@ -37,7 +44,7 @@ namespace android {
 
 namespace hardware {
 
-class IPCThreadState
+class LIBHIDL_EXPORT IPCThreadState
 {
 public:
     static  IPCThreadState*     self();

@@ -17,7 +17,7 @@
 #include <hwbinder/Binder.h>
 
 #include <android-base/macros.h>
-#include <cutils/android_filesystem_config.h>
+#include <private/android_filesystem_config.h>
 #include <cutils/multiuser.h>
 #include <hwbinder/BpHwBinder.h>
 #include <hwbinder/IInterface.h>
@@ -26,7 +26,6 @@
 #include <utils/Log.h>
 #include <utils/misc.h>
 
-#include <linux/sched.h>
 #include <stdio.h>
 
 #include <atomic>
@@ -77,7 +76,7 @@ public:
 
 // ---------------------------------------------------------------------------
 
-BHwBinder::BHwBinder() : mSchedPolicy(SCHED_NORMAL), mSchedPriority(0), mExtras(nullptr)
+BHwBinder::BHwBinder() : mSchedPolicy(0), mSchedPriority(0), mExtras(nullptr)
 {
 }
 
@@ -123,10 +122,14 @@ status_t BHwBinder::transact(
     // extra comment to try to force running all tests
     if (UNLIKELY(code == HIDL_DEBUG_TRANSACTION)) {
         uid_t uid = IPCThreadState::self()->getCallingUid();
+#ifdef _MSC_VER
+        ALOGE( "Can not call IBase::debug from apps" );
+#else
         if (multiuser_get_app_id(uid) >= AID_APP_START) {
             ALOGE("Can not call IBase::debug from apps");
             return PERMISSION_DENIED;
         }
+#endif
     }
 
     return onTransact(code, data, reply, flags, [&](auto& replyParcel) {

@@ -23,6 +23,8 @@
 #include <utils/RefBase.h>
 #include <utils/String16.h>
 
+#include <hwbinder/libhidl_export.h>
+
 // WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
 // this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
 // code should not try to use these things.
@@ -43,7 +45,7 @@ class Parcel;
  * (method calls, property get and set) is down through a low-level
  * protocol implemented on top of the transact() API.
  */
-class IBinder : public virtual RefBase
+class LIBHIDL_EXPORT IBinder : public virtual RefBase
 {
 public:
     using TransactCallback = std::function<void(Parcel&)>;
@@ -93,7 +95,7 @@ public:
                                         uint32_t flags = 0,
                                         TransactCallback callback = nullptr) = 0;
 
-    class DeathRecipient : public virtual RefBase
+    LIBHIDL_EXPORT class DeathRecipient : public virtual RefBase
     {
     public:
         virtual void binderDied(const wp<IBinder>& who) = 0;

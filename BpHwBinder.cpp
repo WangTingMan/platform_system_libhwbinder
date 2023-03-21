@@ -285,6 +285,9 @@ void BpHwBinder::onFirstRef()
 void BpHwBinder::onLastStrongRef(const void* /*id*/)
 {
     ALOGV("onLastStrongRef BpHwBinder %p handle %d\n", this, mHandle);
+#ifdef _MSC_VER
+    ALOGE( "NOT PORTING" );
+#else
     IF_ALOGV() {
         printRefs();
     }
@@ -293,7 +296,6 @@ void BpHwBinder::onLastStrongRef(const void* /*id*/)
         ipc->decStrongHandle(mHandle);
         ipc->flushCommands();
     }
-
     mLock.lock();
     Vector<Obituary>* obits = mObituaries;
     if(obits != nullptr) {
@@ -313,6 +315,7 @@ void BpHwBinder::onLastStrongRef(const void* /*id*/)
         delete obits;
         obits = nullptr;
     }
+#endif
 }
 
 bool BpHwBinder::onIncStrongAttempted(uint32_t /*flags*/, const void* /*id*/)

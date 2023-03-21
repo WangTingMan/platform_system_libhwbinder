@@ -18,34 +18,39 @@
 #define ANDROID_HARDWARE_BINDER_DEBUG_H
 
 #include <stdint.h>
-#include <sys/cdefs.h>
 #include <sys/types.h>
+
+#include <hwbinder/libhidl_export.h>
 
 // WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
 // this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
 // code should not try to use these things.
 
+#ifndef ssize_t
+#define ssize_t int64_t
+#endif
+
 namespace android {
 namespace hardware {
 // ---------------------------------------------------------------------------
 
-__BEGIN_DECLS
+extern "C" {
 
-const char* stringForIndent(int32_t indentLevel);
+LIBHIDL_EXPORT const char* stringForIndent(int32_t indentLevel);
 
 typedef void (*debugPrintFunc)(void* cookie, const char* txt);
 
-void printTypeCode(uint32_t typeCode,
+LIBHIDL_EXPORT void printTypeCode(uint32_t typeCode,
     debugPrintFunc func = nullptr, void* cookie = nullptr);
 
-void printHexData(int32_t indent, const void *buf, size_t length,
+LIBHIDL_EXPORT void printHexData(int32_t indent, const void *buf, size_t length,
     size_t bytesPerLine=16, int32_t singleLineBytesCutoff=16,
     size_t alignment=0, bool cArrayStyle=false,
     debugPrintFunc func = nullptr, void* cookie = nullptr);
 
-ssize_t getHWBinderKernelReferences(size_t count, uintptr_t* buf);
+LIBHIDL_EXPORT ssize_t getHWBinderKernelReferences(size_t count, uintptr_t* buf);
 
-__END_DECLS
+}
 
 // ---------------------------------------------------------------------------
 } // namespace hardware

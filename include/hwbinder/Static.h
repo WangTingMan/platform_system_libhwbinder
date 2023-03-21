@@ -22,6 +22,8 @@
 #include <hwbinder/IBinder.h>
 #include <hwbinder/ProcessState.h>
 
+#include <hwbinder/libhidl_export.h>
+
 // WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
 // this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
 // code should not try to use these things.
@@ -30,7 +32,7 @@ namespace android {
 namespace hardware {
 
 // For TextStream.cpp
-extern Vector<int32_t> gTextBuffers;
+LIBHIDL_EXPORT extern Vector<int32_t> gTextBuffers;
 
 }   // namespace hardware
 }   // namespace android

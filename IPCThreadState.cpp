@@ -26,6 +26,7 @@
 #include <utils/Log.h>
 #include <utils/SystemClock.h>
 #include <utils/threads.h>
+#include <cutils/threads.h>
 
 #include "binder_kernel.h"
 #include <hwbinder/Static.h>
@@ -37,6 +38,8 @@
 #include <inttypes.h>
 #include <signal.h>
 #include <stdio.h>
+
+#include <linux/binder.h>
 
 #if LOG_NDEBUG
 
@@ -51,10 +54,10 @@
 
 #define IF_LOG_TRANSACTIONS() IF_ALOG(LOG_VERBOSE, "transact")
 #define IF_LOG_COMMANDS() IF_ALOG(LOG_VERBOSE, "ipc")
-#define LOG_REMOTEREFS(...) ALOG(LOG_DEBUG, "remoterefs", __VA_ARGS__)
-#define IF_LOG_REMOTEREFS() IF_ALOG(LOG_DEBUG, "remoterefs")
-#define LOG_THREADPOOL(...) ALOG(LOG_DEBUG, "threadpool", __VA_ARGS__)
-#define LOG_ONEWAY(...) ALOG(LOG_DEBUG, "ipc", __VA_ARGS__)
+#define LOG_REMOTEREFS(...) ALOG(ANDROID_LOG_DEBUG, "remoterefs", __VA_ARGS__)
+#define IF_LOG_REMOTEREFS() IF_ALOG(ANDROID_LOG_DEBUG, "remoterefs")
+#define LOG_THREADPOOL(...) ALOG(ANDROID_LOG_DEBUG, "threadpool", __VA_ARGS__)
+#define LOG_ONEWAY(...) ALOG(ANDROID_LOG_DEBUG, "ipc", __VA_ARGS__)
 
 #endif
 
@@ -125,26 +128,21 @@ static const char* getReturnString(uint32_t cmd)
 
 static const void* printBinderTransactionData(TextOutput& out, const void* data)
 {
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return nullptr;
-#else
     const binder_transaction_data* btd =
         (const binder_transaction_data*)data;
-    if (btd->target.handle < 1024) {
+    if (btd->target.binder_handle < 1024) {
         /* want to print descriptors in decimal; guess based on value */
-        out << "target.desc=" << btd->target.handle;
+        out << "target.desc=" << btd->target.binder_handle;
     } else {
-        out << "target.ptr=" << btd->target.ptr;
+        out << "target.ptr=" << btd->target.binder_target_ptr;
     }
-    out << " (cookie " << btd->cookie << ")" << endl
+    out << " (cookie " << btd->binder_transaction_cookie << ")" << endl
         << "code=" << TypeCode(btd->code) << ", flags=" << (void*)(long)btd->flags << endl
         << "data=" << btd->data.ptr.buffer << " (" << (void*)btd->data_size
         << " bytes)" << endl
         << "offsets=" << btd->data.ptr.offsets << " (" << (void*)btd->offsets_size
         << " bytes)";
     return btd+1;
-#endif
 }
 
 static const void* printReturnCommand(TextOutput& out, const void* _cmd)
@@ -464,29 +462,27 @@ status_t IPCThreadState::getAndExecuteCommand()
     int32_t cmd;
 
     result = talkWithDriver();
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     if (result >= NO_ERROR) {
-        size_t IN = mIn.dataAvail();
-        if (IN < sizeof(int32_t)) return result;
+        size_t IN_ = mIn.dataAvail();
+        if (IN_ < sizeof(int32_t)) return result;
         cmd = mIn.readInt32();
         IF_LOG_COMMANDS() {
+            alog.setSourceLocation(__FILE__, __LINE__);
             alog << "Processing top-level Command: "
                  << getReturnString(cmd) << endl;
         }
 
-        pthread_mutex_lock(&mProcess->mThreadCountLock);
+        std::unique_lock<std::mutex> pthread_mutex_locker(mProcess->mThreadCountLock);
         mProcess->mExecutingThreadsCount++;
         if (mProcess->mExecutingThreadsCount >= mProcess->mMaxThreads &&
             mProcess->mMaxThreads > 1 && mProcess->mStarvationStartTimeMs == 0) {
             mProcess->mStarvationStartTimeMs = uptimeMillis();
         }
-        pthread_mutex_unlock(&mProcess->mThreadCountLock);
+        pthread_mutex_locker.unlock();
 
         result = executeCommand(cmd);
 
-        pthread_mutex_lock(&mProcess->mThreadCountLock);
+        pthread_mutex_locker.lock();
         mProcess->mExecutingThreadsCount--;
         if (mProcess->mExecutingThreadsCount < mProcess->mMaxThreads &&
             mProcess->mStarvationStartTimeMs != 0) {
@@ -500,7 +496,7 @@ status_t IPCThreadState::getAndExecuteCommand()
             }
             mProcess->mStarvationStartTimeMs = 0;
         }
-        pthread_mutex_unlock(&mProcess->mThreadCountLock);
+        pthread_mutex_locker.unlock();
     }
 
     if (UNLIKELY(!mPostCommandTasks.empty())) {
@@ -512,7 +508,6 @@ status_t IPCThreadState::getAndExecuteCommand()
             func();
         }
     }
-#endif
     return result;
 }
 
@@ -663,18 +658,15 @@ status_t IPCThreadState::transact(int32_t handle,
 {
     status_t err = NO_ERROR;
 
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     flags |= TF_ACCEPT_FDS;
 
     IF_LOG_TRANSACTIONS() {
-        alog << "BC_TRANSACTION thr " << (void*)pthread_self() << " / hand "
+        alog << "BC_TRANSACTION thr " << gettid() << " / hand "
             << handle << " / code " << TypeCode(code) << ": "
             << indent << data << dedent << endl;
     }
 
-    LOG_ONEWAY(">>>> SEND from pid %d uid %d %s", getpid(), getuid(),
+    LOG_ONEWAY(">>>> SEND from pid %d uid %d %s", getpid(), /*getuid()*/0,
         (flags & TF_ONE_WAY) == 0 ? "READ REPLY" : "ONE WAY");
     err = writeTransactionData(BC_TRANSACTION_SG, flags, handle, code, data, nullptr);
 
@@ -716,7 +708,7 @@ status_t IPCThreadState::transact(int32_t handle,
         #endif
 
         IF_LOG_TRANSACTIONS() {
-            alog << "BR_REPLY thr " << (void*)pthread_self() << " / hand "
+            alog << "BR_REPLY thr " << gettid() << " / hand "
                 << handle << ": ";
             if (reply) alog << indent << *reply << dedent << endl;
             else alog << "(none requested)" << endl;
@@ -724,7 +716,6 @@ status_t IPCThreadState::transact(int32_t handle,
     } else {
         err = waitForResponse(nullptr, nullptr);
     }
-#endif
     return err;
 }
 

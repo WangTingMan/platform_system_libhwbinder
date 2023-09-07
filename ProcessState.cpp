@@ -36,6 +36,11 @@
 
 #include <atomic>
 
+#ifdef _MSC_VER
+#include <linux/binder.h>
+#include <hwbinder/hidl_parcel_writer_impl.h>
+#endif
+
 #define DEFAULT_BINDER_VM_SIZE ((1 * 1024 * 1024) - /*sysconf(_SC_PAGE_SIZE)*/2 * 2)
 #define DEFAULT_MAX_BINDER_THREADS 0
 #define DEFAULT_ENABLE_ONEWAY_SPAM_DETECTION 1
@@ -88,6 +93,7 @@ sp<ProcessState> ProcessState::init(size_t mmapSize, bool requireMmapSize) {
     [[clang::no_destroy]] static std::once_flag gProcessOnce;
     std::call_once(gProcessOnce, [&](){
         std::lock_guard<std::mutex> l(gProcessMutex);
+        ::android::register_detail_hidl_parcel_writer();
         gProcess = new ProcessState(mmapSize);
     });
 
@@ -392,32 +398,27 @@ void ProcessState::giveThreadPoolName() {
 
 static int open_driver()
 {
-
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return 0;
-#else
-    int fd = open("/dev/hwbinder", O_RDWR | O_CLOEXEC);
+    int fd = porting_binder::open_binder("/dev/hwbinder", O_RDWR | O_CLOEXEC);
     if (fd >= 0) {
         int vers = 0;
-        status_t result = ioctl(fd, BINDER_VERSION, &vers);
+        status_t result = porting_binder::fcntl_binder(fd, BINDER_VERSION, &vers);
         if (result == -1) {
             ALOGE("Binder ioctl to obtain version failed: %s", strerror(errno));
-            close(fd);
+            porting_binder::close_binder(fd);
             fd = -1;
         }
         if (result != 0 || vers != BINDER_CURRENT_PROTOCOL_VERSION) {
           ALOGE("Binder driver protocol(%d) does not match user space protocol(%d)!", vers, BINDER_CURRENT_PROTOCOL_VERSION);
-            close(fd);
+          porting_binder::close_binder(fd);
             fd = -1;
         }
         size_t maxThreads = DEFAULT_MAX_BINDER_THREADS;
-        result = ioctl(fd, BINDER_SET_MAX_THREADS, &maxThreads);
+        result = porting_binder::fcntl_binder(fd, BINDER_SET_MAX_THREADS, &maxThreads);
         if (result == -1) {
             ALOGE("Binder ioctl to set max threads failed: %s", strerror(errno));
         }
         uint32_t enable = DEFAULT_ENABLE_ONEWAY_SPAM_DETECTION;
-        result = ioctl(fd, BINDER_ENABLE_ONEWAY_SPAM_DETECTION, &enable);
+        result = porting_binder::fcntl_binder(fd, BINDER_ENABLE_ONEWAY_SPAM_DETECTION, &enable);
         if (result == -1) {
             ALOGV("Binder ioctl to enable oneway spam detection failed: %s", strerror(errno));
         }
@@ -425,7 +426,6 @@ static int open_driver()
         ALOGW("Opening '/dev/hwbinder' failed: %s\n", strerror(errno));
     }
     return fd;
-#endif
 }
 
 ProcessState::ProcessState(size_t mmapSize)

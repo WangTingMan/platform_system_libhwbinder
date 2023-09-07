@@ -39,6 +39,10 @@
 #endif
 #endif
 
+#ifdef _MSC_VER
+struct binder_transaction_data;
+#endif
+
 // ---------------------------------------------------------------------------
 namespace android {
 
@@ -119,7 +123,15 @@ public:
             IPCThreadState();
             ~IPCThreadState();
 
-            status_t            sendReply(const Parcel& reply, uint32_t flags);
+#ifdef _MSC_VER
+            void routeContextObject( std::string a_service_name );
+#endif
+
+#ifdef _MSC_VER
+            status_t            sendReply( const Parcel& reply, uint32_t flags, binder_transaction_data* tr = nullptr );
+#else
+            status_t            sendReply( const Parcel& reply, uint32_t flags );
+#endif
             status_t            waitForResponse(Parcel *reply,
                                                 status_t *acquireResult=nullptr);
             status_t            talkWithDriver(bool doReceive=true);
@@ -128,7 +140,12 @@ public:
                                                      int32_t handle,
                                                      uint32_t code,
                                                      const Parcel& data,
+#ifdef _MSC_VER
+                                                     status_t* statusBuffer,
+                                                     binder_transaction_data* tr = nullptr );
+#else
                                                      status_t* statusBuffer);
+#endif
             status_t            getAndExecuteCommand();
             status_t            executeCommand(int32_t command);
             void                processPendingDerefs();

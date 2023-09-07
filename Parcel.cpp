@@ -46,6 +46,8 @@
 
 #include <atomic>
 
+#include <linux/binder.h>
+
 #define LOG_REFS(...)
 //#define LOG_REFS(...) ALOG(LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOG_ALLOC(...)
@@ -81,9 +83,6 @@ static size_t gMaxFds = 0;
 void acquire_binder_object(const sp<ProcessState>& proc,
     const flat_binder_object& obj, const void* who)
 {
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     switch (obj.hdr.type) {
         case BINDER_TYPE_BINDER:
             if (obj.binder) {
@@ -96,7 +95,7 @@ void acquire_binder_object(const sp<ProcessState>& proc,
                 reinterpret_cast<RefBase::weakref_type*>(obj.binder)->incWeak(who);
             return;
         case BINDER_TYPE_HANDLE: {
-            const sp<IBinder> b = proc->getStrongProxyForHandle(obj.handle);
+            const sp<IBinder> b = proc->getStrongProxyForHandle(obj.binder_internal_handle);
             if (b != nullptr) {
                 LOG_REFS("Parcel %p acquiring reference on remote %p", who, b.get());
                 b->incStrong(who);
@@ -104,16 +103,14 @@ void acquire_binder_object(const sp<ProcessState>& proc,
             return;
         }
         case BINDER_TYPE_WEAK_HANDLE: {
-            const wp<IBinder> b = proc->getWeakProxyForHandle(obj.handle);
+            const wp<IBinder> b = proc->getWeakProxyForHandle(obj.binder_internal_handle );
             if (b != nullptr) b.get_refs()->incWeak(who);
             return;
         }
     }
     ALOGD( "Invalid object type 0x%08x", obj.hdr.type );
-#endif
 }
-#ifdef _MSC_VER
-#else
+
 void acquire_object(const sp<ProcessState>& proc, const binder_object_header& obj,
         const void *who) {
 
@@ -130,13 +127,10 @@ void acquire_object(const sp<ProcessState>& proc, const binder_object_header& ob
     }
 
 }
-#endif
+
 void release_object(const sp<ProcessState>& proc,
     const flat_binder_object& obj, const void* who)
 {
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     switch (obj.hdr.type) {
         case BINDER_TYPE_BINDER:
             if (obj.binder) {
@@ -149,7 +143,7 @@ void release_object(const sp<ProcessState>& proc,
                 reinterpret_cast<RefBase::weakref_type*>(obj.binder)->decWeak(who);
             return;
         case BINDER_TYPE_HANDLE: {
-            const sp<IBinder> b = proc->getStrongProxyForHandle(obj.handle);
+            const sp<IBinder> b = proc->getStrongProxyForHandle(obj.binder_internal_handle );
             if (b != nullptr) {
                 LOG_REFS("Parcel %p releasing reference on remote %p", who, b.get());
                 b->decStrong(who);
@@ -157,13 +151,15 @@ void release_object(const sp<ProcessState>& proc,
             return;
         }
         case BINDER_TYPE_WEAK_HANDLE: {
-            const wp<IBinder> b = proc->getWeakProxyForHandle(obj.handle);
+            const wp<IBinder> b = proc->getWeakProxyForHandle(obj.binder_internal_handle );
             if (b != nullptr) b.get_refs()->decWeak(who);
             return;
         }
         case BINDER_TYPE_FD: {
             if (obj.cookie != 0) { // owned
-                close(obj.handle);
+#ifndef _MSC_VER
+                close(obj.binder_internal_handle );
+#endif
             }
             return;
         }
@@ -177,28 +173,17 @@ void release_object(const sp<ProcessState>& proc,
         }
     }
     ALOGE("Invalid object type 0x%08x", obj.hdr.type); 
-#endif
 }
 
 inline static status_t finish_flatten_binder(
     const sp<IBinder>& /*binder*/, const flat_binder_object& flat, Parcel* out)
 {
-
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return NO_ERROR;
-#else
     return out->writeObject(flat);
-#endif
 }
 
 status_t flatten_binder(const sp<ProcessState>& /*proc*/,
     const sp<IBinder>& binder, Parcel* out)
 {
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return NO_ERROR;
-#else
     flat_binder_object obj = {};
 
     if (binder != nullptr) {
@@ -212,7 +197,7 @@ status_t flatten_binder(const sp<ProcessState>& /*proc*/,
             obj.hdr.type = BINDER_TYPE_HANDLE;
             obj.flags = FLAT_BINDER_FLAG_ACCEPTS_FDS;
             obj.binder = 0; /* Don't pass uninitialized stack data to a remote process */
-            obj.handle = handle;
+            obj.binder_internal_handle = handle;
             obj.cookie = 0;
         } else {
             // Get policy and convert it
@@ -235,7 +220,6 @@ status_t flatten_binder(const sp<ProcessState>& /*proc*/,
         obj.cookie = 0;
     }
     return finish_flatten_binder(binder, obj, out);  
-#endif
 }
 
 inline static status_t finish_unflatten_binder(
@@ -652,7 +636,6 @@ status_t Parcel::writeObject(const T& val)
     if (enoughData && enoughObjects) {
 restart_write:
         *reinterpret_cast<T*>(mData+mDataPos) = val;
-#ifndef _MSC_VER
         const binder_object_header* hdr = reinterpret_cast<binder_object_header*>(mData+mDataPos);
         switch (hdr->type) {
             case BINDER_TYPE_BINDER:
@@ -692,7 +675,6 @@ restart_write:
                 break;
             }
         }
-#endif
         return finishWrite(sizeof(val));
     }
 
@@ -725,9 +707,6 @@ bool Parcel::validateBufferChild(size_t child_buffer_handle,
                                  size_t child_offset) const {
     if (child_buffer_handle >= mObjectsSize)
         return false;
-#ifdef _MSC_VER
-        ALOGE( "Not Porting" );
-#else
     binder_buffer_object *child = reinterpret_cast<binder_buffer_object*>
             (mData + mObjects[child_buffer_handle]);
     if (child->hdr.type != BINDER_TYPE_PTR || child_offset > child->length) {
@@ -737,7 +716,6 @@ bool Parcel::validateBufferChild(size_t child_buffer_handle,
                    child_offset, (size_t)child->length);
         return false;
     }
-#endif
     return true;
 }
 
@@ -745,9 +723,6 @@ bool Parcel::validateBufferParent(size_t parent_buffer_handle,
                                   size_t parent_offset) const {
     if (parent_buffer_handle >= mObjectsSize)
         return false;
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     binder_buffer_object *parent = reinterpret_cast<binder_buffer_object*>
             (mData + mObjects[parent_buffer_handle]);
     if (parent->hdr.type != BINDER_TYPE_PTR ||
@@ -756,7 +731,6 @@ bool Parcel::validateBufferParent(size_t parent_buffer_handle,
         // Parent object not a buffer, or not large enough
         return false;
     }
-#endif
     return true;
 }
 status_t Parcel::writeEmbeddedBuffer(
@@ -767,10 +741,6 @@ status_t Parcel::writeEmbeddedBuffer(
          parent_offset, mObjectsSize);
     if(!validateBufferParent(parent_buffer_handle, parent_offset))
         return BAD_VALUE;
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return NO_ERROR;
-#else
     binder_buffer_object obj = {
         .hdr = { .type = BINDER_TYPE_PTR },
         .flags = BINDER_BUFFER_FLAG_HAS_PARENT,
@@ -784,17 +754,12 @@ status_t Parcel::writeEmbeddedBuffer(
         *handle = mObjectsSize;
     }
     return writeObject( obj );
-#endif
 }
 
 status_t Parcel::writeBuffer(const void *buffer, size_t length, size_t *handle)
 {
     LOG_BUFFER("writeBuffer(%p, %zu) -> %zu",
         buffer, length, mObjectsSize);
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return NO_ERROR;
-#else
     binder_buffer_object obj {
         .hdr = { .type = BINDER_TYPE_PTR },
         .flags = 0,
@@ -806,7 +771,6 @@ status_t Parcel::writeBuffer(const void *buffer, size_t length, size_t *handle)
         *handle = mObjectsSize;
     }
     return writeObject( obj );
-#endif
 }
 
 void Parcel::clearCache() const {
@@ -819,9 +783,6 @@ void Parcel::updateCache() const {
     if(mBufCachePos == mObjectsSize)
         return;
     LOG_BUFFER( "updating cache from %zu to %zu", mBufCachePos, mObjectsSize );
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     for(size_t i = mBufCachePos; i < mObjectsSize; i++) {
         binder_size_t dataPos = mObjects[i];
         binder_buffer_object *obj =
@@ -835,7 +796,6 @@ void Parcel::updateCache() const {
         mBufCache.push_back(ifo);
     }
     mBufCachePos = mObjectsSize;
-#endif
 }
 
 /* O(n) (n=#buffers) to find a buffer that contains the given addr */
@@ -914,10 +874,6 @@ status_t Parcel::writeNativeHandleNoDup(const native_handle_t *handle,
         return status;
     }
 
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return NO_ERROR;
-#else
     struct binder_fd_array_object fd_array {
         .hdr = { .type = BINDER_TYPE_FDA },
         .num_fds = static_cast<binder_size_t>(handle->numFds),
@@ -925,7 +881,6 @@ status_t Parcel::writeNativeHandleNoDup(const native_handle_t *handle,
         .parent_offset = offsetof(native_handle_t, data),
     };
     return writeObject( fd_array );
-#endif
 }
 
 status_t Parcel::writeNativeHandleNoDup(const native_handle_t *handle)
@@ -1686,9 +1641,6 @@ size_t Parcel::ipcBufferSize() const
         i--;
         const binder_buffer_object* buffer
             = reinterpret_cast< binder_buffer_object* >( mData + mObjects[i] );
-#ifdef _MSC_VER 
-        ALOGE( "Not Porting" );
-#else
         if (buffer->hdr.type == BINDER_TYPE_PTR) {
             /* The binder kernel driver requires each buffer to be 8-byte
              * aligned */
@@ -1700,7 +1652,6 @@ size_t Parcel::ipcBufferSize() const
             }
             totalBuffersSize += alignedSize;
         }
-#endif
     }
     return totalBuffersSize;
 }
@@ -1723,9 +1674,6 @@ void Parcel::ipcSetDataReference(const uint8_t* data, size_t dataSize,
     mOwner = relFunc;
     mOwnerCookie = relCookie;
 
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     for (size_t i = 0; i < mObjectsSize; i++) {
         binder_size_t offset = mObjects[i];
         if (offset < minOffset) {
@@ -1737,7 +1685,6 @@ void Parcel::ipcSetDataReference(const uint8_t* data, size_t dataSize,
         minOffset = offset + sizeof(flat_binder_object);
     }
     scanForFds();
-#endif
 }
 
 void Parcel::print(TextOutput& to, uint32_t /*flags*/) const
@@ -1755,10 +1702,6 @@ void Parcel::print(TextOutput& to, uint32_t /*flags*/) const
         for (size_t i=0; i<N; i++) {
             const flat_binder_object* flat
                 = reinterpret_cast<const flat_binder_object*>(DATA+OBJS[i]);
-
-#ifdef _MSC_VER 
-            ALOGE( "Not Porting" );
-#else
             if (flat->hdr.type == BINDER_TYPE_PTR) {
                 const binder_buffer_object* buffer
                     = reinterpret_cast<const binder_buffer_object*>(DATA+OBJS[i]);
@@ -1771,7 +1714,6 @@ void Parcel::print(TextOutput& to, uint32_t /*flags*/) const
                     << TypeCode(flat->hdr.type & 0x7f7f7f00)
                     << " = " << flat->binder;
             }
-#endif
         }
     } else {
         to << "NULL";
@@ -1782,9 +1724,6 @@ void Parcel::print(TextOutput& to, uint32_t /*flags*/) const
 
 void Parcel::releaseObjects()
 {
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     const sp<ProcessState> proc(ProcessState::self());
     size_t i = mObjectsSize;
     uint8_t* const data = mData;
@@ -1795,14 +1734,10 @@ void Parcel::releaseObjects()
             = reinterpret_cast<flat_binder_object*>(data+objects[i]);
         release_object(proc, *flat, this);
     }
-#endif
 }
 
 void Parcel::acquireObjects()
 {
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     const sp<ProcessState> proc(ProcessState::self());
     size_t i = mObjectsSize;
     uint8_t* const data = mData;
@@ -1813,7 +1748,6 @@ void Parcel::acquireObjects()
             = reinterpret_cast<binder_object_header*>(data+objects[i]);
         acquire_object(proc, *flat, this);
     }
-#endif
 }
 
 void Parcel::freeData()
@@ -2113,10 +2047,7 @@ void Parcel::initState()
 
     // racing multiple init leads only to multiple identical write
     if (gMaxFds == 0) {
-
-#ifdef _MSC_VER 
-        ALOGE( "Not Porting" );
-#else
+#ifndef _MSC_VER
         struct rlimit result;
         if (!getrlimit(RLIMIT_NOFILE, &result)) {
             gMaxFds = (size_t)result.rlim_cur;
@@ -2135,15 +2066,10 @@ void Parcel::scanForFds() const
     for (size_t i=0; i<mObjectsSize; i++) {
         const flat_binder_object* flat
             = reinterpret_cast<const flat_binder_object*>(mData + mObjects[i]);
-
-#ifdef _MSC_VER 
-        ALOGE( "Not Porting" );
-#else
         if (flat->hdr.type == BINDER_TYPE_FD) {
             hasFds = true;
             break;
         }
-#endif
     }
     mHasFds = hasFds;
     mFdsKnown = true;

@@ -42,6 +42,11 @@
 struct binder_buffer_object;
 struct flat_binder_object;
 
+namespace android
+{
+    class hidl_parcel_writer_impl;
+}
+
 // ---------------------------------------------------------------------------
 namespace android {
 namespace hardware {
@@ -61,6 +66,7 @@ class TextOutput;
 
 class LIBHIDL_EXPORT Parcel {
     friend class IPCThreadState;
+    friend class ::android::hidl_parcel_writer_impl;
 public:
 
                         Parcel();

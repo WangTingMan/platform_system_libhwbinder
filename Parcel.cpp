@@ -48,6 +48,17 @@
 
 #include <linux/binder.h>
 
+#ifdef _MSC_VER
+#ifdef ALOGI
+#undef ALOGI
+#define ALOGI(...)
+#endif
+#ifdef ALOGV
+#undef ALOGV
+#define ALOGV(...)
+#endif
+#endif
+
 #define LOG_REFS(...)
 //#define LOG_REFS(...) ALOG(LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOG_ALLOC(...)
@@ -2059,6 +2070,20 @@ void Parcel::initState()
 #endif
     }
 }
+
+#ifdef _MSC_VER
+void Parcel::emitError( std::string a_str, bool a_crash )
+{
+    if( a_crash )
+    {
+        ALOGF( a_str.c_str() );
+    }
+    else
+    {
+        ALOGE( a_str.c_str() );
+    }
+}
+#endif
 
 void Parcel::scanForFds() const
 {

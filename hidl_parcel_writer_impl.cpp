@@ -16,7 +16,7 @@ namespace android
                 return std::make_shared<hidl_parcel_writer_impl>();
             };
 
-        register_parcel_writer_maker( maker );
+        register_hidl_parcel_writer_maker( maker );
     }
 
     void hidl_parcel_writer_impl::copy_to( uint8_t* a_dest, uint32_t a_size )

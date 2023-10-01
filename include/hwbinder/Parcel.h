@@ -29,6 +29,8 @@
 
 #include <hwbinder/libhidl_export.h>
 
+#include <hidl/HidlSupport.h>
+
 #ifdef _MSC_VER
 #ifdef interface
 #undef interface
@@ -128,6 +130,94 @@ public:
     status_t            writeString16(const char16_t* str, size_t len);
     status_t            writeStrongBinder(const sp<IBinder>& val);
     status_t            writeBool(bool val);
+
+#ifdef _MSC_VER
+
+#define MAX_DYNAMIC_VECTOR_SIZE 200
+
+    void emitError( std::string a_str, bool a_crash = true );
+
+    template<typename T>
+    status_t            writeDynamic( ::android::hardware::hidl_vec<T> const& a_values )
+    {
+        uint32_t size = a_values.size();
+        status_t status = 0;
+        status = writeUint32( size );
+        if( size > MAX_DYNAMIC_VECTOR_SIZE )
+        {
+            emitError( "Too many elements to serialize!" );
+        }
+
+        for( uint32_t i = 0; i < a_values.size(); ++i )
+        {
+            status = writeDynamic( a_values[i] );
+        }
+        return status;
+    }
+
+    status_t            writeDynamic( hidl_string const& a_str )
+    {
+        return writeCString( a_str.c_str() );
+    }
+
+    template<typename T>
+    status_t            readDynamic( ::android::hardware::hidl_vec<T>& a_values )
+    {
+        ::android::hardware::hidl_vec<T> values;
+        uint32_t size = 0;
+        status_t status = 0;
+        status = readUint32( &size );
+        if( status != 0 )
+        {
+            return status;
+        }
+
+        if( size > MAX_DYNAMIC_VECTOR_SIZE )
+        {
+            emitError( "Too many elements to serialize!", false );
+        }
+
+        values.resize( size );
+        for( uint32_t i = 0; i < size; ++i )
+        {
+            T value;
+            status = readDynamic( value );
+#ifdef NO_ERROR
+            if( status == 0 )
+            {
+                values[i] = std::move( value );
+            }
+#else
+            if( status == ::android::NO_ERROR )
+            {
+                values[i] = std::move( value );
+            }
+#endif
+        }
+        a_values = std::move( values );
+
+        return status;
+    }
+
+    status_t            readDynamic( hidl_string& a_str )
+    {
+        const char* str = readCString();
+        if( str )
+        {
+            hidl_string value( str );
+            a_str = std::move( value );
+#ifdef NO_ERROR
+            return 0;
+#else
+            return ::android::NO_ERROR;
+#endif
+        }
+        else
+        {
+            return ::android::BAD_VALUE;
+        }
+    }
+#endif
 
     template<typename T>
     status_t            writeObject(const T& val);

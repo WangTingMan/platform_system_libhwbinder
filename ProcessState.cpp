@@ -125,27 +125,23 @@ void ProcessState::becomeContextManager()
 {
     AutoMutex _l(mLock);
 
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
     flat_binder_object obj {
         .flags = FLAT_BINDER_FLAG_TXN_SECURITY_CTX,
     };
 
-    status_t result = ioctl(mDriverFD, BINDER_SET_CONTEXT_MGR_EXT, &obj);
+    status_t result = porting_binder::fcntl_binder(mDriverFD, BINDER_SET_CONTEXT_MGR_EXT, &obj);
 
     // fallback to original method
     if (result != 0) {
         android_errorWriteLog(0x534e4554, "121035042");
 
         int unused = 0;
-        result = ioctl(mDriverFD, BINDER_SET_CONTEXT_MGR, &unused);
+        result = porting_binder::fcntl_binder(mDriverFD, BINDER_SET_CONTEXT_MGR, &unused);
     }
 
     if (result == -1) {
         ALOGE("Binder ioctl to become context manager failed: %s\n", strerror(errno));
     }
-#endif
 }
 
 // Get references to userspace objects held by the kernel binder driver
@@ -156,17 +152,13 @@ void ProcessState::becomeContextManager()
 // already be invalid.
 ssize_t ProcessState::getKernelReferences(size_t buf_count, uintptr_t* buf) {
 
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return 0;
-#else
     binder_node_debug_info info = {};
 
     uintptr_t* end = buf ? buf + buf_count : nullptr;
     size_t count = 0;
 
     do {
-        status_t result = ioctl(mDriverFD, BINDER_GET_NODE_DEBUG_INFO, &info);
+        status_t result = porting_binder::fcntl_binder(mDriverFD, BINDER_GET_NODE_DEBUG_INFO, &info);
         if (result < 0) {
             return -1;
         }
@@ -179,7 +171,6 @@ ssize_t ProcessState::getKernelReferences(size_t buf_count, uintptr_t* buf) {
     } while (info.ptr != 0);
 
     return count;
-#endif
 }
 
 // Queries the driver for the current strong reference count of the node
@@ -188,16 +179,12 @@ ssize_t ProcessState::getKernelReferences(size_t buf_count, uintptr_t* buf) {
 // Returns -1 in case of failure, otherwise the strong reference count.
 ssize_t ProcessState::getStrongRefCountForNodeByHandle(int32_t handle) {
 
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return 0;
-#else
     binder_node_info_for_ref info;
     memset(&info, 0, sizeof(binder_node_info_for_ref));
 
     info.handle = handle;
 
-    status_t result = ioctl(mDriverFD, BINDER_GET_NODE_INFO_FOR_REF, &info);
+    status_t result = porting_binder::fcntl_binder(mDriverFD, BINDER_GET_NODE_INFO_FOR_REF, &info);
 
     if (result != OK) {
         static bool logged = false;
@@ -209,7 +196,6 @@ ssize_t ProcessState::getStrongRefCountForNodeByHandle(int32_t handle) {
     }
 
     return info.strong_count;
-#endif
 }
 
 size_t ProcessState::getMmapSize() {
@@ -360,14 +346,10 @@ status_t ProcessState::setThreadPoolConfiguration(size_t maxThreads, bool caller
 
     AutoMutex _l(mLock);
 
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
-    if (ioctl(mDriverFD, BINDER_SET_MAX_THREADS, &kernelMaxThreads) == -1) {
+    if ( porting_binder::fcntl_binder(mDriverFD, BINDER_SET_MAX_THREADS, &kernelMaxThreads) == -1) {
         ALOGE("Binder ioctl to set max threads failed: %s", strerror(errno));
         return -errno;
     }
-#endif
     mMaxThreads = maxThreads;
     mSpawnThreadOnStart = spawnThreadOnStart;
 
@@ -377,14 +359,11 @@ status_t ProcessState::setThreadPoolConfiguration(size_t maxThreads, bool caller
 status_t ProcessState::enableOnewaySpamDetection(bool enable) {
     uint32_t enableDetection = enable ? 1 : 0;
 
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-#else
-    if (ioctl(mDriverFD, BINDER_ENABLE_ONEWAY_SPAM_DETECTION, &enableDetection) == -1) {
+    if ( porting_binder::fcntl_binder(mDriverFD, BINDER_ENABLE_ONEWAY_SPAM_DETECTION, &enableDetection) == -1) {
         ALOGI("Binder ioctl to enable oneway spam detection failed: %s", strerror(errno));
         return -errno;
     }
-#endif
+
     return NO_ERROR;
 }
 

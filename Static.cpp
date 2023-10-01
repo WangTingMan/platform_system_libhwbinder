@@ -24,6 +24,13 @@
 #include <hwbinder/IPCThreadState.h>
 #include <utils/Log.h>
 
+#ifdef _MSC_VER
+#ifdef ALOGI
+#undef ALOGI
+#define ALOGI(...)
+#endif
+#endif
+
 namespace android {
 namespace hardware {
 

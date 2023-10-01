@@ -41,6 +41,7 @@
 
 #include <linux/binder.h>
 #include <base/process/process.h>
+#include <base/strings/string_split.h>
 #include <linux/MessageLooper.h>
 #include "binder_driver/ipc_connection_token.h"
 
@@ -594,13 +595,7 @@ void IPCThreadState::joinThreadPool(bool isMain)
             }
         };
 
-    std::function<void()> handler;
-    handler = [fun]()
-        {
-            MessageLooper::GetDefault().PostTask( fun );
-        };
-
-    porting_binder::register_binder_data_handler( handler );
+    porting_binder::register_binder_data_handler( fun, false );
     MessageLooper::GetDefault().PostTask( fun );
     MessageLooper::GetDefault().Run();
 #else
@@ -1155,6 +1150,12 @@ status_t IPCThreadState::writeTransactionData(int32_t cmd, uint32_t binderFlags,
         tr_sg.transaction_data.offsets_size = data.ipcObjectsCount()*sizeof(binder_size_t);
         tr_sg.transaction_data.data.ptr.offsets = data.ipcObjects();
         tr_sg.buffers_size = data.ipcBufferSize();
+#ifdef _MSC_VER
+        if( tr_sg.transaction_data.offsets_size > 0 )
+        {
+            ALOGE( "We do not support transfer owership of objects over ipc currently." );
+        }
+#endif
     } else if (statusBuffer) {
         tr_sg.transaction_data.flags |= TF_STATUS_CODE;
         *statusBuffer = err;
@@ -1382,6 +1383,9 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                 lcker.unlock();
                 if( context_object )
                 {
+                    ::android::ipc_connection_token_mgr::get_instance()
+                        .set_current_transaction_connection_name( tr.source_connection_name );
+                    // we do not use reply_callback to send reply here.
                     error = context_object->transact( tr.code, buffer, &reply, tr.flags );
                 }
                 else
@@ -1400,6 +1404,8 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                     reply.setError(error);
 #ifdef _MSC_VER
                     sendReply( reply, ( tr.flags& kForwardReplyFlags ), &tr );
+                    ::android::ipc_connection_token_mgr::get_instance()
+                        .get_current_transaction_connection_name( true );
 #else
                     sendReply(reply, (tr.flags & kForwardReplyFlags));
 #endif
@@ -1475,7 +1481,10 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
 #ifdef _MSC_VER
 void IPCThreadState::routeContextObject( std::string a_service_name )
 {
-    sp<RefBase> service = ipc_connection_token_mgr::get_instance().get_local_service( a_service_name );
+    std::string separators;
+    separators.push_back( ipc_connection_token_mgr::s_name_separator );
+    auto chain_names = ::base::SplitString( a_service_name, separators, ::base::TRIM_WHITESPACE, ::base::SPLIT_WANT_NONEMPTY );
+    sp<RefBase> service = ipc_connection_token_mgr::get_instance().get_local_service( chain_names );
     if( !service )
     {
         ALOGE( "no such service named %s", a_service_name.c_str() );

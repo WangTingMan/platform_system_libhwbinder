@@ -24,6 +24,10 @@
 
 #include <stdio.h>
 
+#ifdef _MSC_VER
+#include <binder_driver/ipc_connection_token.h>
+#endif
+
 //#undef ALOGV
 //#define ALOGV(...) fprintf(stderr, __VA_ARGS__)
 
@@ -104,13 +108,28 @@ status_t BpHwBinder::transact(
 {
     // Once a binder has died, it will never come back to life.
     if (mAlive) {
+#ifdef _MSC_VER
+        std::string service_name;
+        std::string connection_name;
+        int ret = 0;
+        ret = ::android::ipc_connection_token_mgr::get_instance()
+            .find_remote_service_by_id( mHandle, service_name, connection_name );
+        if( ret == 0 )
+        {
+            ::android::ipc_connection_token_mgr::get_instance()
+                .set_current_transaction_connection_name( connection_name );
+        }
+#endif
         status_t status = IPCThreadState::self()->transact(
             mHandle, code, data, reply, flags);
 
         if (status == ::android::OK && callback != nullptr) {
             callback(*reply);
         }
-
+#ifdef _MSC_VER
+        connection_name = ::android::ipc_connection_token_mgr::get_instance()
+            .get_current_transaction_connection_name( true );
+#endif
         if (status == DEAD_OBJECT) mAlive = 0;
         return status;
     }
@@ -285,9 +304,6 @@ void BpHwBinder::onFirstRef()
 void BpHwBinder::onLastStrongRef(const void* /*id*/)
 {
     ALOGV("onLastStrongRef BpHwBinder %p handle %d\n", this, mHandle);
-#ifdef _MSC_VER
-    ALOGE( "NOT PORTING" );
-#else
     IF_ALOGV() {
         printRefs();
     }
@@ -315,7 +331,6 @@ void BpHwBinder::onLastStrongRef(const void* /*id*/)
         delete obits;
         obits = nullptr;
     }
-#endif
 }
 
 bool BpHwBinder::onIncStrongAttempted(uint32_t /*flags*/, const void* /*id*/)

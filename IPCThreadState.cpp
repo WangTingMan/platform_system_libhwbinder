@@ -597,7 +597,22 @@ void IPCThreadState::joinThreadPool(bool isMain)
 
     porting_binder::register_binder_data_handler( fun, false );
     MessageLooper::GetDefault().PostTask( fun );
-    MessageLooper::GetDefault().Run();
+    if( MessageLooper::GetDefault().IsRunning() )
+    {
+        auto fun = [this]()mutable
+            {
+                mOut.setDataSize( 0 );
+                mOut.writeInt32( BC_EXIT_LOOPER );
+                mIsLooper = false;
+                talkWithDriver( false );
+            };
+        MessageLooper::GetDefault().PostExitCallTask( fun );
+        return;
+    }
+    else
+    {
+        MessageLooper::GetDefault().Run();
+    }
 #else
     do {
         processPendingDerefs();
@@ -620,6 +635,9 @@ void IPCThreadState::joinThreadPool(bool isMain)
     LOG_THREADPOOL("**** THREAD %p (PID %d) IS LEAVING THE THREAD POOL err=%d\n",
                     (void*)gettid(), getpid(), result);
 
+#ifdef _MSC_VER
+    mOut.setDataSize( 0 );
+#endif
     mOut.writeInt32(BC_EXIT_LOOPER);
     mIsLooper = false;
     talkWithDriver(false);
@@ -637,6 +655,9 @@ int IPCThreadState::setupPolling(int* fd)
     mProcess->setThreadPoolConfiguration(1, true /* callerWillJoin */);
     mIsPollingThread = true;
 
+#ifdef _MSC_VER
+    mOut.setDataSize( 0 );
+#endif
     mOut.writeInt32(BC_ENTER_LOOPER);
     *fd = mProcess->mDriverFD;
     return 0;
@@ -735,6 +756,9 @@ status_t IPCThreadState::transact(int32_t handle,
 void IPCThreadState::incStrongHandle(int32_t handle, BpHwBinder *proxy)
 {
     LOG_REMOTEREFS("IPCThreadState::incStrongHandle(%d)\n", handle);
+#ifdef _MSC_VER
+    mOut.setDataSize( 0 );
+#endif
     mOut.writeInt32(BC_ACQUIRE);
     mOut.writeInt32(handle);
     // Create a temp reference until the driver has handled this command.
@@ -744,14 +768,20 @@ void IPCThreadState::incStrongHandle(int32_t handle, BpHwBinder *proxy)
 
 void IPCThreadState::decStrongHandle(int32_t handle)
 {
-    LOG_REMOTEREFS("IPCThreadState::decStrongHandle(%d)\n", handle);
+    LOG_REMOTEREFS( "IPCThreadState::decStrongHandle(%d)\n", handle );
+#ifdef _MSC_VER
+    mOut.setDataSize( 0 );
+#endif
     mOut.writeInt32(BC_RELEASE);
     mOut.writeInt32(handle);
 }
 
 void IPCThreadState::incWeakHandle(int32_t handle, BpHwBinder *proxy)
 {
-    LOG_REMOTEREFS("IPCThreadState::incWeakHandle(%d)\n", handle);
+    LOG_REMOTEREFS( "IPCThreadState::incWeakHandle(%d)\n", handle );
+#ifdef _MSC_VER
+    mOut.setDataSize( 0 );
+#endif
     mOut.writeInt32(BC_INCREFS);
     mOut.writeInt32(handle);
     // Create a temp reference until the driver has handled this command.
@@ -761,7 +791,10 @@ void IPCThreadState::incWeakHandle(int32_t handle, BpHwBinder *proxy)
 
 void IPCThreadState::decWeakHandle(int32_t handle)
 {
-    LOG_REMOTEREFS("IPCThreadState::decWeakHandle(%d)\n", handle);
+    LOG_REMOTEREFS( "IPCThreadState::decWeakHandle(%d)\n", handle );
+#ifdef _MSC_VER
+    mOut.setDataSize( 0 );
+#endif
     mOut.writeInt32(BC_DECREFS);
     mOut.writeInt32(handle);
 }
@@ -800,6 +833,9 @@ void IPCThreadState::expungeHandle(int32_t handle, IBinder* binder)
 
 status_t IPCThreadState::requestDeathNotification(int32_t handle, BpHwBinder* proxy)
 {
+#ifdef _MSC_VER
+    mOut.setDataSize( 0 );
+#endif
     mOut.writeInt32(BC_REQUEST_DEATH_NOTIFICATION);
     mOut.writeInt32((int32_t)handle);
     mOut.writePointer((uintptr_t)proxy);
@@ -808,6 +844,9 @@ status_t IPCThreadState::requestDeathNotification(int32_t handle, BpHwBinder* pr
 
 status_t IPCThreadState::clearDeathNotification(int32_t handle, BpHwBinder* proxy)
 {
+#ifdef _MSC_VER
+    mOut.setDataSize( 0 );
+#endif
     mOut.writeInt32(BC_CLEAR_DEATH_NOTIFICATION);
     mOut.writeInt32((int32_t)handle);
     mOut.writePointer((uintptr_t)proxy);
@@ -863,7 +902,41 @@ status_t IPCThreadState::waitForResponse(Parcel *reply, status_t *acquireResult)
     uint32_t cmd;
     int32_t err = NO_ERROR;
 
+#ifdef _MSC_VER
+    std::string current_transaction_con;
+    current_transaction_con = ipc_connection_token_mgr::get_instance()
+        .get_current_transaction_connection_name( false );
+    bool is_exist = ipc_connection_token_mgr::get_instance()
+        .is_connection_name_exist( current_transaction_con );
+    std::chrono::steady_clock::time_point start_;
+    std::chrono::steady_clock::time_point end_;
+    start_ = std::chrono::steady_clock::now();
+#endif
+
     while (1) {
+#ifdef _MSC_VER
+        end_ = std::chrono::steady_clock::now();
+        if( end_ - start_ > std::chrono::milliseconds( 20 ) )
+        {
+            is_exist = ipc_connection_token_mgr::get_instance()
+                .is_connection_name_exist( current_transaction_con );
+            if( is_exist )
+            {
+                if( end_ - start_ > std::chrono::seconds( 5 ) )
+                {
+                    ALOGE( "Seems there is deadlock on remote. connection name: %s", current_transaction_con.c_str() );
+                    err = TIMED_OUT;
+                    break;
+                }
+            }
+            else
+            {
+                ALOGE( "Transaction abort due to remote exit. connection name: %s", current_transaction_con.c_str() );
+                err = FAILED_TRANSACTION;
+                break;
+            }
+        }
+#endif
         if ((err=talkWithDriver()) < NO_ERROR) break;
         err = mIn.errorCheck();
         if (err < NO_ERROR) break;

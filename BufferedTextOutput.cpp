@@ -88,6 +88,13 @@ struct BufferedTextOutput::BufferState : public RefBase
 struct BufferedTextOutput::ThreadState
 {
     Vector<sp<BufferedTextOutput::BufferState> > states;
+    bool valid = true;
+#ifdef _MSC_VER
+    ~ThreadState()
+    {
+        valid = false;
+    }
+#endif
 };
 
 static std::mutex gMutex;
@@ -243,6 +250,12 @@ BufferedTextOutput::BufferState* BufferedTextOutput::getBuffer() const
 {
     if ((mFlags&MULTITHREADED) != 0) {
         thread_local ThreadState ts;
+#ifdef _MSC_VER
+        if( !ts.valid )
+        {
+            return mGlobalState;
+        }
+#endif
         while (ts.states.size() <= (size_t)mIndex) ts.states.add(nullptr);
         BufferState* bs = ts.states[mIndex].get();
         if (bs != nullptr && bs->seq == mSeq) return bs;

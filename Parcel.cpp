@@ -47,6 +47,7 @@
 #include <atomic>
 
 #include <linux/binder.h>
+#include <binder_driver/ipc_connection_token.h>
 
 #ifdef _MSC_VER
 #ifdef ALOGI
@@ -57,6 +58,7 @@
 #undef ALOGV
 #define ALOGV(...)
 #endif
+#define RAW_BINDER_POINTER "RAW_BINDER_POINTER:"
 #endif
 
 #define LOG_REFS(...)
@@ -244,9 +246,8 @@ status_t unflatten_binder(const sp<ProcessState>& proc,
     const Parcel& in, sp<IBinder>* out)
 {
 #ifdef _MSC_VER
-
     ALOGE( "Not Porting" );
-#else    
+#else
     const flat_binder_object* flat = in.readObject<flat_binder_object>();
     if (flat) {
         switch (flat->hdr.type) {
@@ -636,7 +637,23 @@ status_t Parcel::writeString16(const char16_t* str, size_t len)
 }
 status_t Parcel::writeStrongBinder(const sp<IBinder>& val)
 {
+#ifdef _MSC_VER
+    status_t status = NO_ERROR;
+    auto p = val.get();
+    uint64_t p_int = reinterpret_cast<uint64_t>( p );
+    std::string name{ RAW_BINDER_POINTER };
+    name.append( std::to_string( p_int ) );
+    ::android::ipc_connection_token_mgr::get_instance().add_local_service( name, val );
+    status = writeDynamic( name );
+    std::string str;
+    str = ::android::ipc_connection_token_mgr::get_instance().get_local_connection_name();
+    status = writeDynamic( str );
+    str = ::android::ipc_connection_token_mgr::get_instance().get_local_listen_address();
+    status = writeDynamic( str );
+    return status;
+#else
     return flatten_binder(ProcessState::self(), val, this);
+#endif
 }
 
 template <typename T>
@@ -1214,7 +1231,24 @@ status_t Parcel::readStrongBinder(sp<IBinder>* val) const
 
 status_t Parcel::readNullableStrongBinder(sp<IBinder>* val) const
 {
+#ifdef _MSC_VER
+    status_t status = NO_ERROR;
+    sp<IBinder> read_val;
+    std::string name;
+    std::string connection_name;
+    std::string listen_addr;
+    status = readDynamic( name );
+    status = readDynamic( connection_name );
+    status = readDynamic( listen_addr );
+    int service_id = ::android::ipc_connection_token_mgr::get_instance()
+        .add_remote_service( name, connection_name, listen_addr );
+    auto binder = ::android::sp<::android::hardware::BpHwBinder>::make( service_id );
+    *val = binder;
+
+    return status;
+#else
     return unflatten_binder(ProcessState::self(), *this, val);
+#endif
 }
 
 sp<IBinder> Parcel::readStrongBinder() const

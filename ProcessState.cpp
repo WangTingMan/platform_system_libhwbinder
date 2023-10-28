@@ -39,6 +39,7 @@
 #ifdef _MSC_VER
 #include <linux/binder.h>
 #include <hwbinder/hidl_parcel_writer_impl.h>
+#include <linux/MessageLooper.h>
 #endif
 
 #define DEFAULT_BINDER_VM_SIZE ((1 * 1024 * 1024) - /*sysconf(_SC_PAGE_SIZE)*/2 * 2)
@@ -107,11 +108,36 @@ sp<ProcessState> ProcessState::init(size_t mmapSize, bool requireMmapSize) {
 
 void ProcessState::startThreadPool()
 {
+    if( MessageLooper::GetDefault().IsRunning() )
+    {
+        MessageLooper::GetDefault().PostTask(
+            std::bind( &ProcessState::startThreadPoolImpl, self() ) );
+    }
+    else
+    {
+        startThreadPoolImpl();
+    }
+}
+
+void ProcessState::startThreadPoolImpl()
+{
     AutoMutex _l(mLock);
     if (!mThreadPoolStarted) {
         mThreadPoolStarted = true;
-        if (mSpawnThreadOnStart) {
+        if( mSpawnThreadOnStart )
+        {
+#ifdef _MSC_VER
+            if( MessageLooper::GetDefault().IsRunning() )
+            {
+                IPCThreadState::self()->joinThreadPool( true );
+            }
+            else
+            {
+                spawnPooledThread( true );
+            }
+#else
             spawnPooledThread(true);
+#endif
         }
     }
 }

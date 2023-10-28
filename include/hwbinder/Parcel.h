@@ -160,6 +160,21 @@ public:
         return writeCString( a_str.c_str() );
     }
 
+    status_t            writeDynamic( std::string const& a_str )
+    {
+        status_t status = 0;
+        std::size_t size = a_str.size();
+        status = writeUint64( size );
+        status = write( a_str.data(), a_str.size() );
+        return status;
+    }
+
+    template<typename T, typename = typename std::enable_if<std::is_trivially_copyable<T>::value>>
+    status_t            writeDynamic( T const& a_value )
+    {
+        return write( reinterpret_cast<const void*>( &a_value ), sizeof(T) );
+    }
+
     template<typename T>
     status_t            readDynamic( ::android::hardware::hidl_vec<T>& a_values )
     {
@@ -199,6 +214,16 @@ public:
         return status;
     }
 
+    status_t            readDynamic( std::string& a_str )const
+    {
+        status_t status = 0;
+        std::size_t size = 0;
+        status = readUint64( &size );
+        a_str.resize( size + 1, 0x00 );
+        status = read( a_str.data(), size );
+        return status;
+    }
+
     status_t            readDynamic( hidl_string& a_str )
     {
         const char* str = readCString();
@@ -217,6 +242,13 @@ public:
             return ::android::BAD_VALUE;
         }
     }
+
+    template<typename T, typename = typename std::enable_if<std::is_trivially_copyable<T>::value>>
+    status_t            readDynamic( T& a_value )const
+    {
+        return read( reinterpret_cast<void*>( &a_value ), sizeof( T ) );
+    }
+
 #endif
 
     template<typename T>

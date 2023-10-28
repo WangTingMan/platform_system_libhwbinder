@@ -88,6 +88,10 @@ public:
 private:
     static  sp<ProcessState>    init(size_t mmapSize, bool requireMmapSize);
 
+#ifdef _MSC_VER
+            void                startThreadPoolImpl();
+#endif
+
     friend class IPCThreadState;
             explicit            ProcessState(size_t mmapSize);
                                 ~ProcessState();

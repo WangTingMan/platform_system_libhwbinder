@@ -58,10 +58,10 @@
 
 #define IF_LOG_TRANSACTIONS() IF_ALOG(LOG_VERBOSE, "transact")
 #define IF_LOG_COMMANDS() IF_ALOG(LOG_VERBOSE, "ipc")
-#define LOG_REMOTEREFS(...) ALOG(ANDROID_LOG_DEBUG, "remoterefs", __VA_ARGS__)
-#define IF_LOG_REMOTEREFS() IF_ALOG(ANDROID_LOG_DEBUG, "remoterefs")
-#define LOG_THREADPOOL(...) ALOG(ANDROID_LOG_DEBUG, "threadpool", __VA_ARGS__)
-#define LOG_ONEWAY(...) ALOG(ANDROID_LOG_DEBUG, "ipc", __VA_ARGS__)
+#define LOG_REMOTEREFS(...) ALOG(LOG_DEBUG, "remoterefs", __VA_ARGS__)
+#define IF_LOG_REMOTEREFS() IF_ALOG(LOG_DEBUG, "remoterefs")
+#define LOG_THREADPOOL(...) ALOG(LOG_DEBUG, "threadpool", __VA_ARGS__)
+#define LOG_ONEWAY(...) ALOG(LOG_DEBUG, "ipc", __VA_ARGS__)
 
 #endif
 
@@ -1163,8 +1163,8 @@ status_t IPCThreadState::writeTransactionData(int32_t cmd, uint32_t binderFlags,
     tr_sg.transaction_data.code = code;
     tr_sg.transaction_data.flags = binderFlags;
     tr_sg.transaction_data.binder_transaction_cookie = 0;
-    tr_sg.transaction_data.sender_pid = 0;
-    tr_sg.transaction_data.sender_euid = 0;
+    tr_sg.transaction_data.sender_pid = getpid();
+    tr_sg.transaction_data.sender_euid = getpid();
 
 #ifdef _MSC_VER
     binder_transaction_data& tr = tr_sg.transaction_data;

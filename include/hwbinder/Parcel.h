@@ -224,7 +224,7 @@ public:
         return status;
     }
 
-    status_t            readDynamic( hidl_string& a_str )
+    status_t            readDynamic( hidl_string& a_str )const
     {
         const char* str = readCString();
         if( str )

@@ -767,6 +767,13 @@ status_t Parcel::writeEmbeddedBuffer(
     LOG_BUFFER("writeEmbeddedBuffer(%p, %zu, parent = (%zu, %zu)) -> %zu",
         buffer, length, parent_buffer_handle,
          parent_offset, mObjectsSize);
+#ifdef _MSC_VER
+    if(handle)
+    {
+        *handle = 1;
+    }
+    return write(buffer, length);
+#else
     if(!validateBufferParent(parent_buffer_handle, parent_offset))
         return BAD_VALUE;
     binder_buffer_object obj = {
@@ -782,10 +789,15 @@ status_t Parcel::writeEmbeddedBuffer(
         *handle = mObjectsSize;
     }
     return writeObject( obj );
+#endif
 }
 
 status_t Parcel::writeBuffer(const void *buffer, size_t length, size_t *handle)
 {
+#ifdef _MSC_VER
+    *handle = 1;
+    return write(buffer, length);
+#else
     LOG_BUFFER("writeBuffer(%p, %zu) -> %zu",
         buffer, length, mObjectsSize);
     binder_buffer_object obj {
@@ -799,6 +811,7 @@ status_t Parcel::writeBuffer(const void *buffer, size_t length, size_t *handle)
         *handle = mObjectsSize;
     }
     return writeObject( obj );
+#endif
 }
 
 void Parcel::clearCache() const {
@@ -1424,11 +1437,24 @@ bool Parcel::verifyBufferObject(const binder_buffer_object *buffer_obj,
 status_t Parcel::readBuffer(size_t buffer_size, size_t *buffer_handle,
                             uint32_t flags, size_t parent, size_t parentOffset,
                             const void **buffer_out) const {
-
 #ifdef _MSC_VER
+    size_t len = buffer_size;
+    if (len > INT32_MAX) {
+        // don't accept size_t values which may have come from an
+        // inadvertent conversion from a negative int.
+        return BAD_VALUE;
+    }
 
-    ALOGE( "Not Porting" );
-#else    
+    if ((mDataPos + pad_size(len)) >= mDataPos && (mDataPos + pad_size(len)) <= mDataSize
+        && len <= pad_size(len)) {
+        auto buffer_ptr = mData + mDataPos;
+        *buffer_out = buffer_ptr;
+        mDataPos += pad_size(len);
+        ALOGV("read Setting data pos of %p to %zu", this, mDataPos);
+        return NO_ERROR;
+}
+    return NOT_ENOUGH_DATA;
+#else
     const binder_buffer_object* buffer_obj = readObject<binder_buffer_object>( buffer_handle );
     if (buffer_obj == nullptr || buffer_obj->hdr.type != BINDER_TYPE_PTR) {
         return BAD_VALUE;
@@ -1484,13 +1510,8 @@ status_t Parcel::readNullableEmbeddedBuffer(size_t buffer_size,
                                             size_t parent_offset,
                                             const void **buffer_out) const
 {
-#ifdef _MSC_VER
-    ALOGE( "Not Porting" );
-    return NO_ERROR;
-#else
     return readBuffer(buffer_size, buffer_handle, BINDER_BUFFER_FLAG_HAS_PARENT,
                       parent_buffer_handle, parent_offset, buffer_out);
-#endif
 }
 
 status_t Parcel::readEmbeddedNativeHandle(size_t parent_buffer_handle,

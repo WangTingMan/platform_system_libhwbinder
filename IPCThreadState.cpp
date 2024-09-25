@@ -1093,10 +1093,20 @@ status_t IPCThreadState::talkWithDriver(bool doReceive)
             err = -errno;
 #else
 #ifdef _MSC_VER
-        if( porting_binder::fcntl_binder( mProcess->mDriverFD, BINDER_WRITE_READ, &bwr ) >= 0 )
+        int32_t fcntl_binder_ret = porting_binder::fcntl_binder( mProcess->mDriverFD, BINDER_WRITE_READ, &bwr );
+        if( android::TIMED_OUT == fcntl_binder_ret )
+        {
+            // It is OK, then we just want to read some content from binder driver, but seems like there is no
+            // more content to read.
             err = NO_ERROR;
+        }
         else
-            err = -errno;
+        {
+            if( fcntl_binder_ret >= 0 )
+                err = NO_ERROR;
+            else
+                err = -errno;
+        }
 #else
         err = INVALID_OPERATION;
 #endif

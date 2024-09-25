@@ -1725,6 +1725,11 @@ size_t Parcel::ipcBufferSize() const
 void Parcel::ipcSetDataReference(const uint8_t* data, size_t dataSize,
     const binder_size_t* objects, size_t objectsCount, release_func relFunc, void* relCookie)
 {
+#ifdef _MSC_VER
+    // We cannot transfer objects on windows.
+    //objects = nullptr;
+    //objectsCount = 0;
+#endif
     binder_size_t minOffset = 0;
     freeDataNoInit();
     mError = NO_ERROR;

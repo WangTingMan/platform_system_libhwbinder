@@ -95,7 +95,7 @@ public:
                                         uint32_t flags = 0,
                                         TransactCallback callback = nullptr) = 0;
 
-    LIBHIDL_EXPORT class DeathRecipient : public virtual RefBase
+    class DeathRecipient : public virtual RefBase
     {
     public:
         virtual void binderDied(const wp<IBinder>& who) = 0;

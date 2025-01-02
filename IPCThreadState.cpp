@@ -1407,7 +1407,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
             //    (mCallingSid ? mCallingSid : "<N/A>"), mCallingUid);
 
             Parcel reply;
-            status_t error;
+            status_t error = NO_ERROR;
             bool reply_sent = false;
             IF_LOG_TRANSACTIONS() {
                 alog << "BR_TRANSACTION thr " << (void*)gettid()

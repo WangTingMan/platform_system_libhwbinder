@@ -84,8 +84,6 @@ public:
     void                setDataPosition(size_t pos) const;
     status_t            setDataCapacity(size_t size);
 
-    status_t            setData(const uint8_t* buffer, size_t len);
-
     // Zeros data when reallocating. Other mitigations may be added
     // in the future.
     //
@@ -406,7 +404,6 @@ private:
     void                releaseObjects();
     void                acquireObjects();
     status_t            growData(size_t len);
-    status_t            restartWrite(size_t desired);
     status_t            continueWrite(size_t desired);
     status_t            writePointer(uintptr_t val);
     status_t            readPointer(uintptr_t *pArg) const;

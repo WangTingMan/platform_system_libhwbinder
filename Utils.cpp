@@ -15,8 +15,11 @@
  */
 
 #include "Utils.h"
+#include <hwbinder/HidlSupport.h>
 
 #include <string.h>
+#include <android-base/logging.h>
+#include <android-base/properties.h>
 
 namespace android::hardware {
 
@@ -24,4 +27,44 @@ void zeroMemory(uint8_t* data, size_t size) {
     memset(data, 0, size);
 }
 
+static bool file_exists(const std::string& file) {
+    int res = access(file.c_str(), F_OK);
+    if (res == 0 || errno == EACCES) return true;
+    return false;
+}
+
+static bool isHwServiceManagerInstalled() {
+    return file_exists("/system_ext/bin/hwservicemanager") ||
+           file_exists("/system/system_ext/bin/hwservicemanager") ||
+           file_exists("/system/bin/hwservicemanager");
+}
+
+static bool waitForHwServiceManager() {
+    if (!isHwServiceManagerInstalled()) {
+        return false;
+    }
+    // TODO(b/31559095): need bionic host so that we can use 'prop_info' returned
+    // from WaitForProperty
+#ifdef __ANDROID__
+    static const char* kHwServicemanagerReadyProperty = "hwservicemanager.ready";
+
+    using std::literals::chrono_literals::operator""s;
+
+    using android::base::WaitForProperty;
+    while (true) {
+        if (base::GetBoolProperty("hwservicemanager.disabled", false)) {
+            return false;
+        }
+        if (WaitForProperty(kHwServicemanagerReadyProperty, "true", 1s)) {
+            return true;
+        }
+        LOG(WARNING) << "Waited for hwservicemanager.ready for a second, waiting another...";
+    }
+#endif  // __ANDROID__
+    return true;
+}
+
+bool isHwbinderSupportedBlocking() {
+    return waitForHwServiceManager();
+}
 }   // namespace android::hardware

@@ -33,6 +33,8 @@ using android::OK;
 using android::sp;
 using android::status_t;
 using android::String16;
+using android::IBinder;
+using android::BBinder;
 
 // libbinder:
 using android::getService;
@@ -55,6 +57,10 @@ class BenchmarkServiceAidl : public BnBenchmark {
     virtual ~BenchmarkServiceAidl() = default;
 
     Status sendVec(const vector<uint8_t>& data, vector<uint8_t>* _aidl_return) {
+        *_aidl_return = data;
+        return Status::ok();
+    }
+    Status sendBinderVec(const vector<sp<IBinder>>& data, vector<sp<IBinder>>* _aidl_return) {
         *_aidl_return = data;
         return Status::ok();
     }
@@ -91,6 +97,28 @@ static void BM_sendVec_binder(benchmark::State& state) {
 }
 
 BENCHMARK(BM_sendVec_binder)->RangeMultiplier(2)->Range(4, 65536);
+
+static void BM_sendBinderVec_binder(benchmark::State& state) {
+    sp<IBenchmark> service;
+    // Prepare data to IPC
+    vector<sp<IBinder>> data_vec;
+    vector<sp<IBinder>> data_return;
+    data_vec.resize(state.range(0));
+    for (int i = 0; i < state.range(0); i++) {
+       data_vec[i] = sp<BBinder>::make();
+    }
+    // getService automatically retries
+    status_t status = getService(String16(kServiceName), &service);
+    if (status != OK) {
+        state.SkipWithError("Failed to retrieve benchmark service.");
+    }
+    // Start running
+    while (state.KeepRunning()) {
+       service->sendBinderVec(data_vec, &data_return);
+    }
+}
+
+BENCHMARK(BM_sendBinderVec_binder)->RangeMultiplier(2)->Range(4, 65536);
 
 int main(int argc, char* argv []) {
     ::benchmark::Initialize(&argc, argv);

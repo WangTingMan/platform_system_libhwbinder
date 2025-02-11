@@ -20,6 +20,7 @@
 
 #include <hwbinder/Binder.h>
 #include <hwbinder/BpHwBinder.h>
+#include <hwbinder/HidlSupport.h>
 
 #include <android-base/macros.h>
 #include <utils/CallStack.h>
@@ -75,7 +76,7 @@ namespace hardware {
 static const char *kReturnStrings[] = {
     "BR_ERROR",
     "BR_OK",
-    "BR_TRANSACTION",
+    "BR_TRANSACTION/BR_TRANSACTION_SEC_CTX",
     "BR_REPLY",
     "BR_ACQUIRE_RESULT",
     "BR_DEAD_REPLY",
@@ -93,7 +94,7 @@ static const char *kReturnStrings[] = {
     "BR_FAILED_REPLY",
     "BR_FROZEN_REPLY",
     "BR_ONEWAY_SPAM_SUSPECT",
-    "BR_TRANSACTION_SEC_CTX",
+    "BR_TRANSACTION_PENDING_FROZEN",
 };
 
 static const char *kCommandStrings[] = {
@@ -568,6 +569,10 @@ void IPCThreadState::joinThreadPool(bool isMain)
 {
     LOG_THREADPOOL("**** THREAD %p (PID %d) IS JOINING THE THREAD POOL\n", (void*)gettid(), getpid());
 
+    if (!isHwbinderSupportedBlocking()) {
+        ALOGW("HwBinder is not supported on this device, but this process is calling joinThreadPool.");
+    }
+
     mOut.writeInt32(isMain ? BC_ENTER_LOOPER : BC_REGISTER_LOOPER);
 
     status_t result = 0;
@@ -958,6 +963,15 @@ status_t IPCThreadState::waitForResponse(Parcel *reply, status_t *acquireResult)
         case BR_TRANSACTION_COMPLETE:
             if (!reply && !acquireResult) goto finish;
             break;
+
+        case BR_TRANSACTION_PENDING_FROZEN:
+            ALOGW("Sending oneway calls to frozen process.");
+            goto finish;
+
+        case BR_FROZEN_REPLY:
+            ALOGW("Transaction failed because process frozen.");
+            err = FAILED_TRANSACTION;
+            goto finish;
 
         case BR_DEAD_REPLY:
             err = DEAD_OBJECT;
@@ -1390,7 +1404,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                 tr.offsets_size/sizeof(binder_size_t), freeBuffer, this);
 
             const void* origServingStackPointer = mServingStackPointer;
-            mServingStackPointer = &origServingStackPointer; // anything on the stack
+            mServingStackPointer = __builtin_frame_address(0);
 
             const pid_t origPid = mCallingPid;
             const char* origSid = mCallingSid;

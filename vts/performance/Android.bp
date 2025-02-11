@@ -15,6 +15,7 @@
 //
 
 package {
+    default_team: "trendy_team_treble",
     // http://go/android-license-faq
     // A large-scale-change added 'default_applicable_licenses' to import
     // the below license kinds from "system_libhwbinder_license":

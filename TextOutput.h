@@ -148,7 +148,7 @@ inline TextOutput& operator<<(TextOutput& to, const bool &val)
 
 inline TextOutput& operator<<(TextOutput& to, const String16& val)
 {
-    to << String8(val).string();
+    to << String8(val).c_str();
     return to;
 }
 

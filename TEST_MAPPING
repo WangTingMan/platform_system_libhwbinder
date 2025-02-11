@@ -4,12 +4,10 @@
       "name": "libbinderthreadstateutils_test"
     },
     {
-      "name": "SettingsGoogleUnitTests",
-      "options": [
-        {
-          "exclude-annotation": "androidx.test.filters.FlakyTest"
-        }
-      ]
+      "name": "SettingsGoogleUnitTests"
+    },
+    {
+      "name": "CtsOsTestCases_cts_hwbindertest"
     }
   ]
 }

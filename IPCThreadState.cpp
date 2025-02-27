@@ -1404,7 +1404,11 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                 tr.offsets_size/sizeof(binder_size_t), freeBuffer, this);
 
             const void* origServingStackPointer = mServingStackPointer;
+#ifdef _MSC_VER
+            origServingStackPointer = retrieve_frame_address(10);
+#else
             mServingStackPointer = __builtin_frame_address(0);
+#endif
 
             const pid_t origPid = mCallingPid;
             const char* origSid = mCallingSid;

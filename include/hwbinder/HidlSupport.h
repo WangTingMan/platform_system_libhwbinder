@@ -16,7 +16,9 @@
 
 #pragma once
 #include <stdint.h>
+#if __has_include(<sys/cdefs.h>)
 #include <sys/cdefs.h>
+#endif
 #include <sys/types.h>
 
 // WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,

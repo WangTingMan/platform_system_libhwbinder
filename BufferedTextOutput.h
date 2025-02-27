@@ -22,11 +22,17 @@
 #include <utils/threads.h>
 #include <atomic>
 
+#include <cstdint>
+#ifndef _DO_NOT_DEFINE_IOVEC_
+#ifndef _IOVEC_DEFINED_
 struct iovec
 {
-    void* iov_base = nullptr;
-    int iov_len = 0;
+    void* iov_base;
+    std::size_t iov_len;
 };
+#endif
+#define _IOVEC_DEFINED_
+#endif
 
 // ---------------------------------------------------------------------------
 namespace android {

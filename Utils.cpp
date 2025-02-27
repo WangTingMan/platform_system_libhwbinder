@@ -28,9 +28,13 @@ void zeroMemory(uint8_t* data, size_t size) {
 }
 
 static bool file_exists(const std::string& file) {
+#ifdef _MSC_VER
+    return false;
+#else
     int res = access(file.c_str(), F_OK);
     if (res == 0 || errno == EACCES) return true;
     return false;
+#endif
 }
 
 static bool isHwServiceManagerInstalled() {

@@ -18,11 +18,8 @@
 
 #include <hwbinder/ProcessState.h>
 
-<<<<<<< HEAD
-=======
 #include <cutils/atomic.h>
 #include <hwbinder/HidlSupport.h>
->>>>>>> 276bca9
 #include <hwbinder/BpHwBinder.h>
 #include <hwbinder/IPCThreadState.h>
 #include <utils/Log.h>
@@ -39,7 +36,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-<<<<<<< HEAD
 #include <atomic>
 
 #ifdef _MSC_VER
@@ -48,12 +44,9 @@
 #include <linux/MessageLooper.h>
 #endif
 
-#define DEFAULT_BINDER_VM_SIZE ((1 * 1024 * 1024) - /*sysconf(_SC_PAGE_SIZE)*/2 * 2)
-=======
 #include <mutex>
 
-#define DEFAULT_BINDER_VM_SIZE ((1 * 1024 * 1024) - sysconf(_SC_PAGE_SIZE) * 2)
->>>>>>> 276bca9
+#define DEFAULT_BINDER_VM_SIZE ((1 * 1024 * 1024) - /*sysconf(_SC_PAGE_SIZE)*/2 * 2)
 #define DEFAULT_MAX_BINDER_THREADS 0
 #define DEFAULT_ENABLE_ONEWAY_SPAM_DETECTION 1
 
@@ -119,7 +112,6 @@ sp<ProcessState> ProcessState::init(size_t mmapSize, bool requireMmapSize) {
 
 void ProcessState::startThreadPool()
 {
-<<<<<<< HEAD
     if( MessageLooper::GetDefault().IsRunning() )
     {
         MessageLooper::GetDefault().PostTask(
@@ -133,11 +125,10 @@ void ProcessState::startThreadPool()
 
 void ProcessState::startThreadPoolImpl()
 {
-=======
     if (!isHwbinderSupportedBlocking()) {
         ALOGW("HwBinder is not supported on this device but this process is calling startThreadPool");
     }
->>>>>>> 276bca9
+
     AutoMutex _l(mLock);
     if (!mThreadPoolStarted) {
         mThreadPoolStarted = true;

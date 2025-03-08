@@ -356,6 +356,25 @@ status_t Parcel::setDataCapacity(size_t size)
     return NO_ERROR;
 }
 
+#ifdef _MSC_VER
+status_t Parcel::setData(const uint8_t* buffer, size_t len)
+{
+    if (len > INT32_MAX) {
+        // don't accept size_t values which may have come from an
+        // inadvertent conversion from a negative int.
+        return BAD_VALUE;
+    }
+
+    status_t err = restartWrite(len);
+    if (err == NO_ERROR) {
+        memcpy(const_cast<uint8_t*>(data()), buffer, len);
+        mDataSize = len;
+        mFdsKnown = false;
+    }
+    return err;
+}
+#endif
+
 void Parcel::markSensitive() const
 {
     mDeallocZero = true;
@@ -1864,6 +1883,60 @@ static uint8_t* reallocZeroFree(uint8_t* data, size_t oldCapacity, size_t newCap
     free(data);
     return newData;
 }
+
+#ifdef _MSC_VER
+status_t Parcel::restartWrite(size_t desired)
+{
+    if (desired > INT32_MAX) {
+        // don't accept size_t values which may have come from an
+        // inadvertent conversion from a negative int.
+        return BAD_VALUE;
+    }
+
+    if (mOwner) {
+        freeData();
+        return continueWrite(desired);
+    }
+
+    uint8_t* data = reallocZeroFree(mData, mDataCapacity, desired, mDeallocZero);
+    if (!data && desired > mDataCapacity) {
+        mError = NO_MEMORY;
+        return NO_MEMORY;
+    }
+
+    releaseObjects();
+
+    if (data || desired == 0) {
+        LOG_ALLOC("Parcel %p: restart from %zu to %zu capacity", this, mDataCapacity, desired);
+        if (mDataCapacity > desired) {
+            gParcelGlobalAllocSize -= (mDataCapacity - desired);
+        } else {
+            gParcelGlobalAllocSize += (desired - mDataCapacity);
+        }
+
+        if (!mData) {
+            gParcelGlobalAllocCount++;
+        }
+        mData = data;
+        mDataCapacity = desired;
+    }
+
+    mDataSize = mDataPos = 0;
+    ALOGV("restartWrite Setting data size of %p to %zu", this, mDataSize);
+    ALOGV("restartWrite Setting data pos of %p to %zu", this, mDataPos);
+
+    free(mObjects);
+    mObjects = nullptr;
+    mObjectsSize = mObjectsCapacity = 0;
+    mNextObjectHint = 0;
+    mHasFds = false;
+    clearCache();
+    mFdsKnown = true;
+    mAllowFds = true;
+
+    return NO_ERROR;
+}
+#endif
 
 status_t Parcel::continueWrite(size_t desired)
 {

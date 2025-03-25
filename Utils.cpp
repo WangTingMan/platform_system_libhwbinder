@@ -44,6 +44,9 @@ static bool isHwServiceManagerInstalled() {
 }
 
 static bool waitForHwServiceManager() {
+#ifdef _MSC_VER
+    return true;
+#endif
     if (!isHwServiceManagerInstalled()) {
         return false;
     }
